@@ -24,6 +24,7 @@ const M_ROLE   = { Leo: "3D Artist", Shen: "3D Artist", Raha: "Freelancer" };
 
 const TODAY = new Date(2026, 2, 18);
 const STORAGE_KEY = "3d-team-dashboard-state";
+const EDIT_PASSWORD = "3dteam2026";
 const DEFAULT_STATE = { tasks: {}, holidays: {}, leaves: { Leo: {}, Shen: {}, Raha: {} } };
 
 function isoDate(d) {
@@ -59,10 +60,36 @@ function workingDaysFromToday(deadlineIso, holidays, leaveMap={}) {
 
 const emptyForm = () => ({ member:"Leo", type:"pitch", difficulty:"medium", project:"", startDate:"", deadline:"" });
 
+// Set favicon dynamically
+function setFavicon() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 32; canvas.height = 32;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#534AB7";
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 32, 32, 8);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 18px system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("3D", 16, 17);
+  const link = document.querySelector("link[rel*='icon']") || document.createElement("link");
+  link.type = "image/x-icon";
+  link.rel = "shortcut icon";
+  link.href = canvas.toDataURL();
+  document.head.appendChild(link);
+  document.title = "3D Team Dashboard";
+}
+
 export default function Dashboard() {
   const [state, setState] = useState(DEFAULT_STATE);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState("saved");
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
 
   const [windowOffset, setWindowOffset] = useState(0);
   const [tab, setTab] = useState("calendar");
@@ -75,7 +102,8 @@ export default function Dashboard() {
   const [editTask, setEditTask] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  // Load from localStorage on mount
+  useEffect(() => { setFavicon(); }, []);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -89,19 +117,28 @@ export default function Dashboard() {
     setLoading(false);
   }, []);
 
-  // Save to localStorage on state change
   useEffect(() => {
     if (loading) return;
     const timer = setTimeout(() => {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         setSaveStatus("saved");
-      } catch (e) {
-        setSaveStatus("error");
-      }
+      } catch (e) { setSaveStatus("error"); }
     }, 600);
     return () => clearTimeout(timer);
   }, [state, loading]);
+
+  const handleEditUnlock = () => {
+    if (passwordInput === EDIT_PASSWORD) {
+      setIsEditMode(true);
+      setShowPasswordModal(false);
+      setPasswordInput("");
+      setPasswordError(false);
+    } else {
+      setPasswordError(true);
+      setPasswordInput("");
+    }
+  };
 
   const days = useMemo(()=>buildWindow(windowOffset),[windowOffset]);
   const week1=days.slice(0,7), week2=days.slice(7,14);
@@ -139,14 +176,14 @@ export default function Dashboard() {
   const removeTask=(iso,member,id)=>mutateMember(iso,member,list=>list.filter(t=>t.id!==id));
 
   const addTask=()=>{
-    if(!form.project.trim()||!form.deadline)return;
+    if(!isEditMode||!form.project.trim()||!form.deadline)return;
     const diff=DIFFICULTY.find(d=>d.id===form.difficulty);
     const task={id:Date.now(),type:form.type,difficulty:form.difficulty,project:form.project.trim(),startDate:form.startDate,deadline:form.deadline,pts:diff.pts,done:false};
     mutateMember(form.deadline, form.member, list=>[...list,task]);
     setForm(emptyForm());
   };
 
-  const openEdit=(iso,member,task)=>{ setEditTask({iso,member,task}); setEditForm({type:task.type,difficulty:task.difficulty,project:task.project,startDate:task.startDate||"",deadline:task.deadline}); };
+  const openEdit=(iso,member,task)=>{ if(!isEditMode)return; setEditTask({iso,member,task}); setEditForm({type:task.type,difficulty:task.difficulty,project:task.project,startDate:task.startDate||"",deadline:task.deadline}); };
 
   const saveEdit=()=>{
     if(!editTask||!editForm.project.trim()||!editForm.deadline)return;
@@ -162,29 +199,31 @@ export default function Dashboard() {
     setEditTask(null);
   };
 
-  const addLeave=()=>{ if(!leaveForm.date)return; setState(prev=>({...prev,leaves:{...prev.leaves,[leaveForm.member]:{...prev.leaves[leaveForm.member],[leaveForm.date]:true}}})); setLeaveForm(f=>({...f,date:""})); };
-  const removeLeave=(m,d)=>setState(prev=>{ const u={...prev.leaves[m]}; delete u[d]; return{...prev,leaves:{...prev.leaves,[m]:u}}; });
-  const addHoliday=()=>{ if(!holForm.date||!holForm.label.trim())return; setState(prev=>({...prev,holidays:{...prev.holidays,[holForm.date]:holForm.label.trim()}})); setHolForm({date:"",label:""}); };
-  const removeHoliday=d=>setState(prev=>{ const h={...prev.holidays}; delete h[d]; return{...prev,holidays:h}; });
+  const addLeave=()=>{ if(!isEditMode||!leaveForm.date)return; setState(prev=>({...prev,leaves:{...prev.leaves,[leaveForm.member]:{...prev.leaves[leaveForm.member],[leaveForm.date]:true}}})); setLeaveForm(f=>({...f,date:""})); };
+  const removeLeave=(m,d)=>{ if(!isEditMode)return; setState(prev=>{ const u={...prev.leaves[m]}; delete u[d]; return{...prev,leaves:{...prev.leaves,[m]:u}}; }); };
+
+  const addHoliday=()=>{ if(!isEditMode||!holForm.date||!holForm.label.trim())return; setState(prev=>({...prev,holidays:{...prev.holidays,[holForm.date]:holForm.label.trim()}})); setHolForm({date:"",label:""}); };
+  const removeHoliday=d=>{ if(!isEditMode)return; setState(prev=>{ const h={...prev.holidays}; delete h[d]; return{...prev,holidays:h}; }); };
 
   const isActiveTaskDay=(iso,member)=>allTasks.some(t=>{ if(t.member!==member||t.done)return false; const start=t.startDate||t.deadline; return iso>=start&&iso<=t.deadline; });
 
   const DoneBtn=({done,onClick,size=22})=>(
-    <button onClick={onClick} title={done?"Mark active":"Mark done"} style={{flexShrink:0,width:size,height:size,borderRadius:"50%",border:`2px solid ${done?"#3B6D11":"#888780"}`,background:done?"#3B6D11":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .15s",boxShadow:done?"0 0 0 3px #C0DD97":"0 0 0 1px #D3D1C7"}}>
+    <button onClick={isEditMode?onClick:undefined} title={isEditMode?(done?"Mark active":"Mark done"):"View only"} style={{flexShrink:0,width:size,height:size,borderRadius:"50%",border:`2px solid ${done?"#3B6D11":isEditMode?"#888780":"#ddd"}`,background:done?"#3B6D11":isEditMode?"#fff":"#f5f5f5",cursor:isEditMode?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .15s",boxShadow:done?"0 0 0 3px #C0DD97":"0 0 0 1px #D3D1C7"}}>
       {done?<span style={{color:"#fff",fontSize:size*0.55,lineHeight:1,fontWeight:700}}>✓</span>:<span style={{color:"#B4B2A9",fontSize:size*0.45,lineHeight:1}}>○</span>}
     </button>
   );
 
-  const EditBtn=({onClick,size=14})=>(
-    <button onClick={onClick} title="Edit task" style={{flexShrink:0,width:size+6,height:size+6,borderRadius:4,border:"0.5px solid #ccc",background:"#f5f5f5",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:size,color:"#666",lineHeight:1}}>✏</button>
-  );
+  const EditBtn=({onClick,size=14})=>{
+    if(!isEditMode)return null;
+    return <button onClick={onClick} title="Edit task" style={{flexShrink:0,width:size+6,height:size+6,borderRadius:4,border:"0.5px solid #ccc",background:"#f5f5f5",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:size,color:"#666",lineHeight:1}}>✏</button>;
+  };
 
   const CompactCard=({t,iso,member})=>{
     const tt=TASK_TYPES.find(x=>x.id===t.type), df=DIFFICULTY.find(x=>x.id===t.difficulty);
     const wdTotal=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays,state.leaves[member]||{}):null;
     const wdRemain=!t.done?workingDaysFromToday(t.deadline,state.holidays,state.leaves[member]||{}):null;
     return (
-      <div style={{borderRadius:6,padding:"4px 6px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":M_BORDER[member]}`,opacity:t.done?0.55:1,transition:"opacity .2s",marginBottom:2}}>
+      <div style={{borderRadius:6,padding:"4px 6px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":M_BORDER[member]}`,opacity:t.done?0.55:1,marginBottom:2}}>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={16}/>
           <div style={{flex:1,minWidth:0}}>
@@ -197,10 +236,10 @@ export default function Dashboard() {
               {wdRemain!==null&&<span style={{fontSize:8,color:wdRemain<=2?"#A32D2D":"#888",fontWeight:wdRemain<=2?600:400}}>{wdRemain}d left</span>}
             </div>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+          {isEditMode&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
             <EditBtn onClick={()=>openEdit(iso,member,t)} size={11}/>
             <button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:10,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:0,lineHeight:1}}>✕</button>
-          </div>
+          </div>}
         </div>
       </div>
     );
@@ -212,7 +251,7 @@ export default function Dashboard() {
     const wdRemain=!t.done?workingDaysFromToday(t.deadline,state.holidays,state.leaves[member]||{}):null;
     const isPast=!t.done&&t.deadline<TODAY_ISO;
     return (
-      <div style={{borderRadius:10,padding:"12px 14px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":isPast?"#F09595":M_BORDER[member]}`,borderLeft:`4px solid ${t.done?"#ddd":M_COLOR[member]}`,opacity:t.done?0.6:1,marginBottom:8,transition:"opacity .2s"}}>
+      <div style={{borderRadius:10,padding:"12px 14px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":isPast?"#F09595":M_BORDER[member]}`,borderLeft:`4px solid ${t.done?"#ddd":M_COLOR[member]}`,opacity:t.done?0.6:1,marginBottom:8}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
           <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={24}/>
           <div style={{flex:1,minWidth:0}}>
@@ -220,8 +259,8 @@ export default function Dashboard() {
               <span style={{fontSize:11,fontWeight:500,background:M_BG2[member],color:M_TEXT[member],border:`0.5px solid ${M_BORDER[member]}`,borderRadius:4,padding:"2px 8px"}}>{tt.label}</span>
               <span style={{fontSize:13,fontWeight:500,flex:1,textDecoration:t.done?"line-through":"none",color:t.done?"#888":"#111"}}>{t.project}</span>
               <span style={{fontSize:11,background:df.bg,color:df.color,border:`0.5px solid ${df.border}`,borderRadius:4,padding:"2px 8px"}}>{df.label}·{t.pts}pt</span>
-              <EditBtn onClick={()=>openEdit(iso,member,t)} size={13}/>
-              <button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:12,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:"0 2px"}}>✕</button>
+              {isEditMode&&<><EditBtn onClick={()=>openEdit(iso,member,t)} size={13}/>
+              <button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:12,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:"0 2px"}}>✕</button></>}
             </div>
             <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
               {t.startDate&&<span style={{fontSize:11,color:"#888"}}>▶ <b style={{color:"#111"}}>{t.startDate}</b></span>}
@@ -254,7 +293,11 @@ export default function Dashboard() {
           ?<span style={{fontSize:10,color:"#888780",fontStyle:"italic"}}>No work</span>
           :<>
             {activeDots.length>0&&<div style={{display:"flex",gap:3,marginBottom:1}}>{activeDots.map(m=><span key={m} title={`${m} active`} style={{width:7,height:7,borderRadius:"50%",background:M_COLOR[m],display:"inline-block"}}/>)}</div>}
-            {(leoLeave||shenLeave||rahaLeave)&&<div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{leoLeave&&<span style={{fontSize:9,background:M_BG.Leo,color:M_TEXT.Leo,borderRadius:4,padding:"1px 5px"}}>Leo off</span>}{shenLeave&&<span style={{fontSize:9,background:M_BG.Shen,color:M_TEXT.Shen,borderRadius:4,padding:"1px 5px"}}>Shen off</span>}{rahaLeave&&<span style={{fontSize:9,background:M_BG.Raha,color:M_TEXT.Raha,borderRadius:4,padding:"1px 5px"}}>Raha off</span>}</div>}
+            {(leoLeave||shenLeave||rahaLeave)&&<div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+              {leoLeave&&<span style={{fontSize:9,background:M_BG.Leo,color:M_TEXT.Leo,borderRadius:4,padding:"1px 5px"}}>Leo off{isEditMode&&<button onClick={()=>removeLeave("Leo",iso)} style={{marginLeft:3,background:"none",border:"none",cursor:"pointer",color:M_TEXT.Leo,fontSize:9,padding:0,lineHeight:1}}>✕</button>}</span>}
+              {shenLeave&&<span style={{fontSize:9,background:M_BG.Shen,color:M_TEXT.Shen,borderRadius:4,padding:"1px 5px"}}>Shen off{isEditMode&&<button onClick={()=>removeLeave("Shen",iso)} style={{marginLeft:3,background:"none",border:"none",cursor:"pointer",color:M_TEXT.Shen,fontSize:9,padding:0,lineHeight:1}}>✕</button>}</span>}
+              {rahaLeave&&<span style={{fontSize:9,background:M_BG.Raha,color:M_TEXT.Raha,borderRadius:4,padding:"1px 5px"}}>Raha off{isEditMode&&<button onClick={()=>removeLeave("Raha",iso)} style={{marginLeft:3,background:"none",border:"none",cursor:"pointer",color:M_TEXT.Raha,fontSize:9,padding:0,lineHeight:1}}>✕</button>}</span>}
+            </div>}
             {MEMBERS.map(m=>(dayTasks[m]||[]).map(t=><CompactCard key={t.id} t={t} iso={iso} member={m}/>))}
           </>
         }
@@ -280,7 +323,7 @@ export default function Dashboard() {
   };
 
   const EditModal=()=>{
-    if (!editTask) return null;
+    if(!editTask)return null;
     const {member}=editTask;
     return (
       <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setEditTask(null)}>
@@ -301,9 +344,7 @@ export default function Dashboard() {
             </div>
             <div>
               <label style={{fontSize:11,color:"#555",display:"block",marginBottom:6}}>Difficulty</label>
-              <div style={{display:"flex",gap:6}}>
-                {DIFFICULTY.map(d=><button key={d.id} onClick={()=>setEditForm(f=>({...f,difficulty:d.id}))} style={{flex:1,fontSize:12,fontWeight:500,padding:"6px 0",borderRadius:8,cursor:"pointer",background:editForm.difficulty===d.id?d.bg:"#f5f5f5",color:editForm.difficulty===d.id?d.color:"#666",border:`0.5px solid ${editForm.difficulty===d.id?d.border:"#ddd"}`}}>{d.label}<br/><span style={{fontSize:10,fontWeight:400}}>{d.pts}pt</span></button>)}
-              </div>
+              <div style={{display:"flex",gap:6}}>{DIFFICULTY.map(d=><button key={d.id} onClick={()=>setEditForm(f=>({...f,difficulty:d.id}))} style={{flex:1,fontSize:12,fontWeight:500,padding:"6px 0",borderRadius:8,cursor:"pointer",background:editForm.difficulty===d.id?d.bg:"#f5f5f5",color:editForm.difficulty===d.id?d.color:"#666",border:`0.5px solid ${editForm.difficulty===d.id?d.border:"#ddd"}`}}>{d.label}<br/><span style={{fontSize:10,fontWeight:400}}>{d.pts}pt</span></button>)}</div>
             </div>
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <button onClick={()=>setEditTask(null)} style={{flex:1,padding:"9px",fontSize:13,borderRadius:8,border:"0.5px solid #ccc",background:"#f5f5f5",color:"#555",cursor:"pointer"}}>Cancel</button>
@@ -315,6 +356,30 @@ export default function Dashboard() {
     );
   };
 
+  // Password modal
+  const PasswordModal=()=>(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>{setShowPasswordModal(false);setPasswordInput("");setPasswordError(false);}}>
+      <div style={{background:"rgba(255,255,255,0.97)",borderRadius:14,padding:"24px",width:300,boxSizing:"border-box",border:"2px solid #AFA9EC",backdropFilter:"blur(8px)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <span style={{fontWeight:500,fontSize:15,color:"#111"}}>🔒 Editor access</span>
+          <button onClick={()=>{setShowPasswordModal(false);setPasswordInput("");setPasswordError(false);}} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",color:"#888"}}>✕</button>
+        </div>
+        <p style={{fontSize:12,color:"#888",margin:"0 0 14px"}}>Enter the password to enable editing.</p>
+        <input
+          type="password"
+          value={passwordInput}
+          onChange={e=>{setPasswordInput(e.target.value);setPasswordError(false);}}
+          onKeyDown={e=>e.key==="Enter"&&handleEditUnlock()}
+          placeholder="Enter password"
+          autoFocus
+          style={{width:"100%",fontSize:14,padding:"8px 12px",borderRadius:8,border:`1.5px solid ${passwordError?"#F09595":"#ccc"}`,boxSizing:"border-box",marginBottom:6,outline:"none"}}
+        />
+        {passwordError&&<p style={{fontSize:11,color:"#A32D2D",margin:"0 0 10px"}}>Incorrect password. Try again.</p>}
+        <button onClick={handleEditUnlock} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#534AB7",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginTop:passwordError?0:8}}>Unlock editing</button>
+      </div>
+    </div>
+  );
+
   if (loading) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,flexDirection:"column",gap:12,color:"#888"}}>
       <div style={{width:32,height:32,border:"3px solid #eee",borderTop:"3px solid #534AB7",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
@@ -325,19 +390,26 @@ export default function Dashboard() {
 
   return (
     <div style={{fontFamily:"system-ui, sans-serif",padding:"1rem",color:"#111",maxWidth:900,margin:"0 auto"}}>
+      {showPasswordModal&&<PasswordModal/>}
       <EditModal/>
 
+      {/* Header */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.25rem",flexWrap:"wrap",gap:8}}>
         <div>
           <h2 style={{margin:0,fontSize:20,fontWeight:500}}>3D Team Dashboard</h2>
           <p style={{margin:"3px 0 0",fontSize:12,color:"#888"}}>Workload and Calendar Tracker — Leo · Shen · Raha</p>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <span style={{fontSize:11,color:saveStatus==="error"?"#A32D2D":saveStatus==="saving"?"#854F0B":"#3B6D11",display:"flex",alignItems:"center",gap:4}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {/* Save status */}
+          {isEditMode&&<span style={{fontSize:11,color:saveStatus==="error"?"#A32D2D":saveStatus==="saving"?"#854F0B":"#3B6D11",display:"flex",alignItems:"center",gap:4}}>
             <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:saveStatus==="error"?"#E24B4A":saveStatus==="saving"?"#EF9F27":"#639922"}}/>
-            <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
             {saveStatus==="saving"?"Saving…":saveStatus==="error"?"Save failed":"Saved"}
-          </span>
+          </span>}
+          {/* Edit mode toggle */}
+          {isEditMode
+            ? <button onClick={()=>setIsEditMode(false)} style={{fontSize:12,fontWeight:500,padding:"5px 14px",borderRadius:20,cursor:"pointer",background:"#EAF3DE",color:"#3B6D11",border:"0.5px solid #97C459"}}>✓ Editing — Lock</button>
+            : <button onClick={()=>setShowPasswordModal(true)} style={{fontSize:12,fontWeight:500,padding:"5px 14px",borderRadius:20,cursor:"pointer",background:"#f5f5f5",color:"#555",border:"0.5px solid #ccc"}}>🔒 View only</button>
+          }
           <div style={{display:"flex",gap:6}}>
             {[["calendar","Calendar"],["board","Board"]].map(([key,lbl])=>(
               <button key={key} onClick={()=>setTab(key)} style={{fontSize:12,fontWeight:500,padding:"5px 14px",borderRadius:20,cursor:"pointer",background:tab===key?"#111":"transparent",color:tab===key?"#fff":"#888",border:`0.5px solid ${tab===key?"#111":"#ccc"}`}}>{lbl}</button>
@@ -346,6 +418,15 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* View only banner */}
+      {!isEditMode&&(
+        <div style={{background:"#f5f5f5",border:"0.5px solid #ddd",borderRadius:8,padding:"8px 14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:12,color:"#888"}}>👁 You are in view-only mode. Tasks and calendar are read-only.</span>
+          <button onClick={()=>setShowPasswordModal(true)} style={{fontSize:11,color:"#534AB7",background:"none",border:"0.5px solid #AFA9EC",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>Unlock editing</button>
+        </div>
+      )}
+
+      {/* Alerts */}
       {bothHeavy&&(
         <div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:10,padding:"10px 16px",marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -362,6 +443,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Summary cards */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:10,marginBottom:"1.25rem"}}>
         {MEMBERS.map(m=>{
           const w1l=weekLoad(m,week1),w2l=weekLoad(m,week2);
@@ -394,6 +476,7 @@ export default function Dashboard() {
         })}
       </div>
 
+      {/* CALENDAR */}
       {tab==="calendar"&&(
         <div style={{marginBottom:"1.25rem"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -412,6 +495,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* BOARD */}
       {tab==="board"&&(
         <div style={{marginBottom:"1.25rem"}}>
           <div style={{display:"flex",gap:6,marginBottom:14}}>
@@ -429,54 +513,86 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={{background:"#fff",border:"0.5px solid #eee",borderRadius:12,padding:"16px",marginBottom:10}}>
-        <div style={{display:"flex",gap:4,marginBottom:14}}>
-          {[["task","Assign Task"],["leave","Add Leave"],["holiday","Add Holiday"]].map(([key,lbl])=>(
-            <button key={key} onClick={()=>setFormTab(key)} style={{fontSize:12,fontWeight:500,padding:"5px 14px",borderRadius:20,cursor:"pointer",background:formTab===key?"#111":"transparent",color:formTab===key?"#fff":"#888",border:`0.5px solid ${formTab===key?"#111":"#ccc"}`}}>{lbl}</button>
-          ))}
-        </div>
+      {/* FORM — only shown in edit mode */}
+      {isEditMode&&(
+        <div style={{background:"#fff",border:"0.5px solid #eee",borderRadius:12,padding:"16px",marginBottom:10}}>
+          <div style={{display:"flex",gap:4,marginBottom:14}}>
+            {[["task","Assign Task"],["leave","Add Leave"],["holiday","Add Holiday"]].map(([key,lbl])=>(
+              <button key={key} onClick={()=>setFormTab(key)} style={{fontSize:12,fontWeight:500,padding:"5px 14px",borderRadius:20,cursor:"pointer",background:formTab===key?"#111":"transparent",color:formTab===key?"#fff":"#888",border:`0.5px solid ${formTab===key?"#111":"#ccc"}`}}>{lbl}</button>
+            ))}
+          </div>
 
-        {formTab==="task"&&(
-          <>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Team member</label><select value={form.member} onChange={e=>setForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Task type</label><select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{TASK_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Start date (optional)</label><input type="date" value={form.startDate} onChange={e=>setForm(f=>({...f,startDate:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Deadline</label><input type="date" value={form.deadline} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-              <div style={{gridColumn:"1 / -1"}}>
-                <label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Difficulty & points</label>
-                <div style={{display:"flex",gap:6}}>{DIFFICULTY.map(d=><button key={d.id} onClick={()=>setForm(f=>({...f,difficulty:d.id}))} style={{flex:1,fontSize:12,fontWeight:500,padding:"7px 0",borderRadius:8,cursor:"pointer",background:form.difficulty===d.id?d.bg:"#f5f5f5",color:form.difficulty===d.id?d.color:"#888",border:`0.5px solid ${form.difficulty===d.id?d.border:"#ddd"}`}}>{d.label}<br/><span style={{fontSize:10,fontWeight:400}}>{d.pts}pt{d.pts>1?"s":""}</span></button>)}</div>
+          {formTab==="task"&&(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Team member</label><select value={form.member} onChange={e=>setForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Task type</label><select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{TASK_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Start date (optional)</label><input type="date" value={form.startDate} onChange={e=>setForm(f=>({...f,startDate:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Deadline</label><input type="date" value={form.deadline} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+                <div style={{gridColumn:"1 / -1"}}>
+                  <label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Difficulty & points</label>
+                  <div style={{display:"flex",gap:6}}>{DIFFICULTY.map(d=><button key={d.id} onClick={()=>setForm(f=>({...f,difficulty:d.id}))} style={{flex:1,fontSize:12,fontWeight:500,padding:"7px 0",borderRadius:8,cursor:"pointer",background:form.difficulty===d.id?d.bg:"#f5f5f5",color:form.difficulty===d.id?d.color:"#888",border:`0.5px solid ${form.difficulty===d.id?d.border:"#ddd"}`}}>{d.label}<br/><span style={{fontSize:10,fontWeight:400}}>{d.pts}pt{d.pts>1?"s":""}</span></button>)}</div>
+                </div>
+                <div style={{gridColumn:"1 / -1"}}><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Project / event name</label><input value={form.project} onChange={e=>setForm(f=>({...f,project:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addTask()} placeholder="e.g. Ayala Museum pitch, SM North venue walk" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
               </div>
-              <div style={{gridColumn:"1 / -1"}}><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Project / event name</label><input value={form.project} onChange={e=>setForm(f=>({...f,project:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addTask()} placeholder="e.g. Ayala Museum pitch, SM North venue walk" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-            </div>
-            <button onClick={addTask} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>+ Assign task</button>
-          </>
-        )}
+              <button onClick={addTask} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>+ Assign task</button>
+            </>
+          )}
 
-        {formTab==="leave"&&(
-          <>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Member</label><select value={leaveForm.member} onChange={e=>setLeaveForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Leave date</label><input type="date" value={leaveForm.date} onChange={e=>setLeaveForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-            </div>
-            <button onClick={addLeave} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>+ Mark leave day</button>
-            {MEMBERS.map(m=>{ const leaveDays=Object.keys(state.leaves[m]||{}).sort(); if(!leaveDays.length)return null; return <div key={m} style={{marginTop:12}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>{m}'s leave days</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{leaveDays.map(d=><span key={d} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],borderRadius:6,padding:"3px 8px",display:"flex",alignItems:"center",gap:5}}>{d}<button onClick={()=>removeLeave(m,d)} style={{background:"none",border:"none",cursor:"pointer",color:M_TEXT[m],fontSize:10,padding:0}}>✕</button></span>)}</div></div>; })}
-          </>
-        )}
+          {formTab==="leave"&&(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Member</label><select value={leaveForm.member} onChange={e=>setLeaveForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Leave date</label><input type="date" value={leaveForm.date} onChange={e=>setLeaveForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+              </div>
+              <button onClick={addLeave} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Mark leave day</button>
+              {/* Leave list with delete buttons */}
+              {MEMBERS.map(m=>{
+                const leaveDays=Object.keys(state.leaves[m]||{}).sort();
+                if(!leaveDays.length)return null;
+                return (
+                  <div key={m} style={{marginBottom:10}}>
+                    <p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>{m}'s leave days</p>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                      {leaveDays.map(d=>(
+                        <span key={d} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:`0.5px solid ${M_BORDER[m]}`}}>
+                          {d}
+                          <button onClick={()=>removeLeave(m,d)} style={{background:"#fff",border:`1px solid ${M_BORDER[m]}`,borderRadius:"50%",width:16,height:16,cursor:"pointer",color:M_TEXT[m],fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700,lineHeight:1}}>✕</button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
 
-        {formTab==="holiday"&&(
-          <>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Date</label><input type="date" value={holForm.date} onChange={e=>setHolForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-              <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Holiday name</label><input value={holForm.label} onChange={e=>setHolForm(f=>({...f,label:e.target.value}))} placeholder="e.g. Holy Week" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-            </div>
-            <button onClick={addHoliday} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>+ Add holiday</button>
-            {Object.keys(state.holidays).length>0&&<div style={{marginTop:12}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>Marked holidays</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{Object.entries(state.holidays).sort().map(([d,lbl])=><span key={d} style={{fontSize:11,background:"#FAEEDA",color:"#854F0B",borderRadius:6,padding:"3px 8px",display:"flex",alignItems:"center",gap:5}}>{d} · {lbl}<button onClick={()=>removeHoliday(d)} style={{background:"none",border:"none",cursor:"pointer",color:"#854F0B",fontSize:10,padding:0}}>✕</button></span>)}</div></div>}
-          </>
-        )}
-      </div>
+          {formTab==="holiday"&&(
+            <>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Date</label><input type="date" value={holForm.date} onChange={e=>setHolForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+                <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Holiday name</label><input value={holForm.label} onChange={e=>setHolForm(f=>({...f,label:e.target.value}))} placeholder="e.g. Holy Week" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+              </div>
+              <button onClick={addHoliday} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Add holiday</button>
+              {Object.keys(state.holidays).length>0&&(
+                <div>
+                  <p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>Marked holidays</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {Object.entries(state.holidays).sort().map(([d,lbl])=>(
+                      <span key={d} style={{fontSize:11,background:"#FAEEDA",color:"#854F0B",borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:"0.5px solid #EF9F27"}}>
+                        {d} · {lbl}
+                        <button onClick={()=>removeHoliday(d)} style={{background:"#fff",border:"1px solid #EF9F27",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:"#854F0B",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700,lineHeight:1}}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
-      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>
         {TASK_TYPES.map(t=><span key={t.id} style={{fontSize:11,background:"#f5f5f5",color:"#888",border:"0.5px solid #ddd",borderRadius:20,padding:"3px 10px"}}>{t.label}</span>)}
         {MEMBERS.map(m=><span key={m} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],border:`0.5px solid ${M_BORDER[m]}`,borderRadius:20,padding:"3px 10px"}}>{m}</span>)}
       </div>
