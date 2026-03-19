@@ -1,12 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
-const STORAGE_KEY   = "3d-team-dashboard-state";
-const SUPABASE_URL  = "https://wtlqchkpmjuftgtqrtbq.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0bHFjaGtwbWp1ZnRndHFydGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODQ5MjAsImV4cCI6MjA4OTQ2MDkyMH0.jRH0otPxIJqJrEvGqyFEb_9D70XtBT5Jis1v4lTj284";
-const DB_KEY        = "3ds-dashboard-v1";
-const API           = `${SUPABASE_URL}/rest/v1/dashboard`;
-const HDRS          = { "Content-Type": "application/json", "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}`, "Prefer": "return=minimal" };
-
 const TASK_TYPES = [
   { id: "pitch",     label: "Pitch Design"    },
   { id: "execution", label: "Execution Design" },
@@ -14,13 +7,11 @@ const TASK_TYPES = [
   { id: "ocular",    label: "Venue Ocular"     },
   { id: "ingress",   label: "Event Ingress"    },
 ];
-
 const DIFFICULTY = [
   { id: "easy",   label: "Easy",   pts: 1, color: "#3B6D11", bg: "#EAF3DE", border: "#97C459" },
   { id: "medium", label: "Medium", pts: 2, color: "#854F0B", bg: "#FAEEDA", border: "#EF9F27" },
   { id: "hard",   label: "Hard",   pts: 3, color: "#A32D2D", bg: "#FCEBEB", border: "#F09595" },
 ];
-
 const MEMBERS  = ["Leo", "Shen", "Raha"];
 const M_COLOR  = { Leo: "#534AB7", Shen: "#0F6E56", Raha: "#993556" };
 const M_BG     = { Leo: "#EEEDFE", Shen: "#E1F5EE", Raha: "#FBEAF0" };
@@ -28,13 +19,9 @@ const M_BG2    = { Leo: "#CECBF6", Shen: "#9FE1CB", Raha: "#F4C0D1" };
 const M_TEXT   = { Leo: "#534AB7", Shen: "#0F6E56", Raha: "#993556" };
 const M_BORDER = { Leo: "#AFA9EC", Shen: "#5DCAA5", Raha: "#ED93B1" };
 const M_ROLE   = { Leo: "3D Artist", Shen: "3D Artist", Raha: "Freelancer" };
-
+const STORAGE_KEY   = "3d-team-dashboard-state";
 const EDIT_PASSWORD = "3dteam2026";
-const DEFAULT_STATE = {
-  tasks: {}, holidays: {},
-  leaves: { Leo:{}, Shen:{}, Raha:{} },
-  photos: { Leo:"",  Shen:"",  Raha:"" }
-};
+const DEFAULT_STATE = { tasks:{}, holidays:{}, leaves:{Leo:{},Shen:{},Raha:{}}, photos:{Leo:"",Shen:"",Raha:""} };
 
 function getPHToday() {
   const ph = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
@@ -55,7 +42,7 @@ function buildWindow(off, today) {
 }
 function fmtDate(d)  { return d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function dayLabel(d) { return d.toLocaleDateString("en-US",{weekday:"short"}); }
-function isWeekend(d){ const w=d.getDay(); return w===0||w===6; }
+function isWeekend(d){ return d.getDay()===0||d.getDay()===6; }
 
 function workingDaysBetween(startIso, endIso, holidays, leaveMap={}) {
   const s=new Date(startIso+"T00:00:00"), e=new Date(endIso+"T00:00:00");
@@ -67,44 +54,28 @@ function workingDaysFromToday(deadlineIso, todayIso, holidays, leaveMap={}) {
   if(deadlineIso<todayIso) return 0;
   return workingDaysBetween(todayIso, deadlineIso, holidays, leaveMap);
 }
-
-// ── Distribute task points across weeks it spans ──
-// Returns how many "effective" points a task contributes to a given week (array of days)
 function taskPtsInWeek(task, weekDays, holidays, leaveMap={}) {
   if(task.done) return 0;
-  const start = task.startDate || task.deadline;
-  const end   = task.deadline;
-  // Total working days for this task
+  const start = task.startDate||task.deadline, end = task.deadline;
   const totalWd = workingDaysBetween(start, end, holidays, leaveMap);
-  if(totalWd===0) return task.pts; // fallback: credit all to deadline week
-  // Working days of this task that fall within this week
-  const weekWd = weekDays.reduce((s,d)=>{
-    const iso=isoDate(d);
-    if(isWeekend(d)||holidays[iso]||leaveMap[iso]) return s;
-    if(iso>=start&&iso<=end) return s+1;
-    return s;
-  },0);
-  // Proportional share, rounded to 1 decimal
-  return Math.round((task.pts * weekWd / totalWd) * 10) / 10;
+  if(totalWd===0) return task.pts;
+  const weekWd = weekDays.reduce((s,d)=>{ const iso=isoDate(d); if(isWeekend(d)||holidays[iso]||leaveMap[iso]) return s; return iso>=start&&iso<=end?s+1:s; },0);
+  return Math.round((task.pts*weekWd/totalWd)*10)/10;
 }
-
 function setFavicon() {
-  const canvas=document.createElement("canvas"); canvas.width=32; canvas.height=32;
-  const ctx=canvas.getContext("2d");
+  const c=document.createElement("canvas"); c.width=32; c.height=32;
+  const ctx=c.getContext("2d");
   ctx.fillStyle="#534AB7"; ctx.beginPath(); ctx.roundRect(0,0,32,32,8); ctx.fill();
-  ctx.fillStyle="#fff"; ctx.font="bold 14px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
-  ctx.fillText("3D",16,17);
-  const link=document.querySelector("link[rel*='icon']")||document.createElement("link");
-  link.type="image/x-icon"; link.rel="shortcut icon"; link.href=canvas.toDataURL();
-  document.head.appendChild(link); document.title="3D Team Dashboard";
+  ctx.fillStyle="#fff"; ctx.font="bold 14px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("3D",16,17);
+  const l=document.querySelector("link[rel*='icon']")||document.createElement("link");
+  l.type="image/x-icon"; l.rel="shortcut icon"; l.href=c.toDataURL(); document.head.appendChild(l);
+  document.title="3D Team Dashboard";
 }
-
-const emptyForm = () => ({ member:"Leo", type:"pitch", difficulty:"medium", project:"", startDate:"", deadline:"" });
+const emptyForm=()=>({member:"Leo",type:"pitch",difficulty:"medium",project:"",startDate:"",deadline:""});
 
 export default function Dashboard() {
   const today     = useMemo(()=>getPHToday(),[]);
   const TODAY_ISO = useMemo(()=>isoDate(today),[today]);
-
   const [state, setState]             = useState(DEFAULT_STATE);
   const [loading, setLoading]         = useState(true);
   const [saveStatus, setSaveStatus]   = useState("saved");
@@ -115,8 +86,8 @@ export default function Dashboard() {
   const [windowOffset, setWindowOffset] = useState(0);
   const [tab, setTab]                   = useState("calendar");
   const [form, setForm]                 = useState(emptyForm());
-  const [leaveForm, setLeaveForm]       = useState({ member:"Leo", date:"" });
-  const [holForm, setHolForm]           = useState({ date:"", label:"" });
+  const [leaveForm, setLeaveForm]       = useState({member:"Leo",date:""});
+  const [holForm, setHolForm]           = useState({date:"",label:""});
   const [formTab, setFormTab]           = useState("task");
   const [showSuggest, setShowSuggest]   = useState(false);
   const [boardMember, setBoardMember]   = useState("Leo");
@@ -128,130 +99,57 @@ export default function Dashboard() {
   useEffect(()=>{ setFavicon(); },[]);
   useEffect(()=>{ setWindowOffset(0); },[TODAY_ISO]);
 
-  // ── Load: try Supabase first, fall back to localStorage ──
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch(`${API}?id=eq.${DB_KEY}&select=data`, { headers: HDRS });
-        const rows = await res.json();
-        if (rows?.[0]?.data) {
-          const parsed = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
-          parsed.leaves = parsed.leaves || {};
-          parsed.photos = parsed.photos || {};
-          MEMBERS.forEach(m => { parsed.leaves[m] = parsed.leaves[m] || {}; parsed.photos[m] = parsed.photos[m] || ""; });
-          setState(parsed);
-          setLoading(false);
-          return;
-        }
-      } catch (e) {}
-      // fallback to localStorage
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          parsed.leaves = parsed.leaves || {};
-          parsed.photos = parsed.photos || {};
-          MEMBERS.forEach(m => { parsed.leaves[m] = parsed.leaves[m] || {}; parsed.photos[m] = parsed.photos[m] || ""; });
-          setState(parsed);
-        }
-      } catch (e) {}
-      setLoading(false);
-    };
-    load();
-  }, []);
-
-  // ── Poll Supabase every 5 seconds for real-time sync ──
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const res = await fetch(`${API}?id=eq.${DB_KEY}&select=data`, { headers: HDRS });
-        const rows = await res.json();
-        if (rows?.[0]?.data) {
-          const fresh = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
-          fresh.leaves = fresh.leaves || {};
-          fresh.photos = fresh.photos || {};
-          MEMBERS.forEach(m => { fresh.leaves[m] = fresh.leaves[m] || {}; fresh.photos[m] = fresh.photos[m] || ""; });
-          setState(prev => JSON.stringify(prev) !== JSON.stringify(fresh) ? fresh : prev);
-        }
-      } catch (e) {}
-    };
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // ── Save to Supabase + localStorage (debounced) ──
-  const saveToSupabase = async (newState) => {
-    setSaveStatus("saving");
-    // always save to localStorage as backup
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(newState)); } catch (e) {}
-    // try Supabase
+  useEffect(()=>{
     try {
-      // try PATCH first
-      const patch = await fetch(`${API}?id=eq.${DB_KEY}`, {
-        method: "PATCH", headers: HDRS, body: JSON.stringify({ data: JSON.stringify(newState) })
-      });
-      if (!patch.ok) throw new Error("patch failed");
-      setSaveStatus("saved");
-    } catch (e) {
-      try {
-        // if PATCH failed, try POST (insert)
-        await fetch(API, {
-          method: "POST", headers: { ...HDRS, "Prefer": "ignore-duplicates" },
-          body: JSON.stringify({ id: DB_KEY, data: JSON.stringify(newState) })
-        });
-        setSaveStatus("saved");
-      } catch (e2) { setSaveStatus("error"); }
-    }
-  };
+      const saved=localStorage.getItem(STORAGE_KEY);
+      if(saved){
+        const p=JSON.parse(saved);
+        p.leaves=p.leaves||{}; p.photos=p.photos||{};
+        MEMBERS.forEach(m=>{ p.leaves[m]=p.leaves[m]||{}; p.photos[m]=p.photos[m]||""; });
+        setState(p);
+      }
+    } catch(e){}
+    setLoading(false);
+  },[]);
 
-  const updateState = (newState) => {
-    setState(newState);
+  useEffect(()=>{
+    if(loading) return;
     if(saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(()=>saveToSupabase(newState), 800);
-  };
+    saveTimer.current=setTimeout(()=>{
+      try { localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); setSaveStatus("saved"); }
+      catch(e){ setSaveStatus("error"); }
+    },600);
+  },[state,loading]);
 
-  const handleUnlock=()=>{
-    if(pwInput===EDIT_PASSWORD){ setIsEditMode(true); setShowPwModal(false); setPwInput(""); setPwError(false); }
-    else{ setPwError(true); setPwInput(""); }
-  };
+  const updateState=ns=>{ setState(ns); };
+  const handleUnlock=()=>{ if(pwInput===EDIT_PASSWORD){setIsEditMode(true);setShowPwModal(false);setPwInput("");setPwError(false);}else{setPwError(true);setPwInput("");} };
+  const handlePhotoUpload=(member,file)=>{ if(!file)return; const r=new FileReader(); r.onload=e=>updateState({...state,photos:{...state.photos,[member]:e.target.result}}); r.readAsDataURL(file); };
+  const removePhoto=m=>updateState({...state,photos:{...state.photos,[m]:""}});
 
-  const handlePhotoUpload=(member,file)=>{
-    if(!file)return;
-    const reader=new FileReader();
-    reader.onload=e=>{ const ns={...state,photos:{...state.photos,[member]:e.target.result}}; updateState(ns); };
-    reader.readAsDataURL(file);
-  };
-  const removePhoto=(member)=>{ const ns={...state,photos:{...state.photos,[member]:""}}; updateState(ns); };
-
-  const days=useMemo(()=>buildWindow(windowOffset,today),[windowOffset,today]);
-  const week1=days.slice(0,7), week2=days.slice(7,14);
-  const getDay=iso=>state.tasks[iso]||{Leo:[],Shen:[],Raha:[]};
+  const days  = useMemo(()=>buildWindow(windowOffset,today),[windowOffset,today]);
+  const week1 = days.slice(0,7), week2=days.slice(7,14);
+  const getDay= iso=>(state.tasks||{})[iso]||{Leo:[],Shen:[],Raha:[]};
 
   const allTasks=useMemo(()=>{
     const out=[];
-    Object.entries(state.tasks).forEach(([date,members])=>{
-      MEMBERS.forEach(m=>(members[m]||[]).forEach(t=>out.push({...t,date,member:m})));
+    Object.entries(state.tasks||{}).forEach(([date,members])=>{
+      MEMBERS.forEach(m=>((members||{})[m]||[]).forEach(t=>out.push({...t,date,member:m})));
     });
     return out;
-  },[state.tasks]);
+  },[state]);
 
-  // ── Points per week using distributed system ──
   const weekLoad=(member,daysArr)=>{
-    const memberTasks=allTasks.filter(t=>t.member===member&&!t.done);
-    return Math.round(memberTasks.reduce((s,t)=>s+taskPtsInWeek(t,daysArr,state.holidays,state.leaves[member]||{}),0)*10)/10;
+    const mt=allTasks.filter(t=>t.member===member&&!t.done);
+    return Math.round(mt.reduce((s,t)=>s+taskPtsInWeek(t,daysArr,state.holidays||{},(state.leaves||{})[member]||{}),0)*10)/10;
   };
 
   const deadlineMap={};
   allTasks.filter(t=>t.deadline&&!t.done).forEach(t=>{ (deadlineMap[t.deadline]=deadlineMap[t.deadline]||[]).push(t); });
   const overlaps=Object.entries(deadlineMap).filter(([,a])=>a.length>1);
-  const w1Loads=MEMBERS.map(m=>weekLoad(m,week1));
-  const w2Loads=MEMBERS.map(m=>weekLoad(m,week2));
+  const w1Loads=MEMBERS.map(m=>weekLoad(m,week1)), w2Loads=MEMBERS.map(m=>weekLoad(m,week2));
   const bothHeavy=(w1Loads[0]>=10&&w1Loads[1]>=10)||(w2Loads[0]>=10&&w2Loads[1]>=10);
 
-  const mutateMember=(iso,member,fn)=>{
-    const ns={...state,tasks:{...state.tasks,[iso]:{...state.tasks[iso],[member]:fn((state.tasks[iso]||{})[member]||[])}}};
-    updateState(ns);
-  };
+  const mutateMember=(iso,member,fn)=>{ const ns={...state,tasks:{...state.tasks,[iso]:{...(state.tasks||{})[iso],[member]:fn(((state.tasks||{})[iso]||{})[member]||[])}}}; updateState(ns); };
   const toggleDone =(iso,member,id)=>mutateMember(iso,member,list=>list.map(t=>t.id===id?{...t,done:!t.done}:t));
   const removeTask =(iso,member,id)=>mutateMember(iso,member,list=>list.filter(t=>t.id!==id));
 
@@ -260,12 +158,11 @@ export default function Dashboard() {
     const diff=DIFFICULTY.find(d=>d.id===form.difficulty);
     const task={id:Date.now(),type:form.type,difficulty:form.difficulty,project:form.project.trim(),startDate:form.startDate,deadline:form.deadline,pts:diff.pts,done:false};
     const iso=form.deadline;
-    const ns={...state,tasks:{...state.tasks,[iso]:{...state.tasks[iso],[form.member]:[...((state.tasks[iso]||{})[form.member]||[]),task]}}};
+    const ns={...state,tasks:{...state.tasks,[iso]:{...(state.tasks||{})[iso],[form.member]:[...((state.tasks||{})[iso]?.[form.member]||[]),task]}}};
     updateState(ns); setForm(emptyForm());
   };
 
   const openEdit=(iso,member,task)=>{ if(!isEditMode)return; setEditTask({iso,member,task}); setEditForm({type:task.type,difficulty:task.difficulty,project:task.project,startDate:task.startDate||"",deadline:task.deadline}); };
-
   const saveEdit=()=>{
     if(!editTask||!editForm.project.trim()||!editForm.deadline)return;
     const {iso,member,task}=editTask;
@@ -274,26 +171,24 @@ export default function Dashboard() {
     const oldList=((state.tasks[iso]||{})[member]||[]).filter(t=>t.id!==task.id);
     const nd=editForm.deadline;
     const newList=[...((state.tasks[nd]||{})[member]||[]),updated];
-    const ns={...state,tasks:{...state.tasks,[iso]:{...(state.tasks[iso]||{}),[member]:oldList},[nd]:{...(state.tasks[nd]||{}),[member]:newList}}};
-    updateState(ns); setEditTask(null);
+    updateState({...state,tasks:{...state.tasks,[iso]:{...(state.tasks[iso]||{}),[member]:oldList},[nd]:{...(state.tasks[nd]||{}),[member]:newList}}});
+    setEditTask(null);
   };
 
-  const addLeave=()=>{ if(!isEditMode||!leaveForm.date)return; const ns={...state,leaves:{...state.leaves,[leaveForm.member]:{...state.leaves[leaveForm.member],[leaveForm.date]:true}}}; updateState(ns); setLeaveForm(f=>({...f,date:""})); };
+  const addLeave=()=>{ if(!isEditMode||!leaveForm.date)return; updateState({...state,leaves:{...state.leaves,[leaveForm.member]:{...state.leaves[leaveForm.member],[leaveForm.date]:true}}}); setLeaveForm(f=>({...f,date:""})); };
   const removeLeave=(m,d)=>{ if(!isEditMode)return; const u={...state.leaves[m]}; delete u[d]; updateState({...state,leaves:{...state.leaves,[m]:u}}); };
   const addHoliday=()=>{ if(!isEditMode||!holForm.date||!holForm.label.trim())return; updateState({...state,holidays:{...state.holidays,[holForm.date]:holForm.label.trim()}}); setHolForm({date:"",label:""}); };
   const removeHoliday=d=>{ if(!isEditMode)return; const h={...state.holidays}; delete h[d]; updateState({...state,holidays:h}); };
-
-  const isActiveTaskDay=(iso,member)=>allTasks.some(t=>{ if(t.member!==member||t.done)return false; const start=t.startDate||t.deadline; return iso>=start&&iso<=t.deadline; });
+  const isActiveTaskDay=(iso,member)=>allTasks.some(t=>{ if(t.member!==member||t.done)return false; const s=t.startDate||t.deadline; return iso>=s&&iso<=t.deadline; });
 
   const Avatar=({member,size=36,showUpload=false})=>{
-    const photo=state.photos?.[member];
+    const photo=(state.photos||{})[member];
     return(
       <div style={{position:"relative",flexShrink:0}}>
         <div style={{width:size,height:size,borderRadius:"50%",background:M_BG[member],border:`2px solid ${M_BORDER[member]}`,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:600,color:M_TEXT[member],cursor:showUpload&&isEditMode?"pointer":"default"}} onClick={()=>showUpload&&isEditMode&&photoInputRefs.current[member]?.click()}>
           {photo?<img src={photo} alt={member} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:member[0]}
         </div>
-        {showUpload&&isEditMode&&<><div style={{position:"absolute",bottom:-2,right:-2,width:16,height:16,borderRadius:"50%",background:"#534AB7",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",border:"1.5px solid #fff",fontSize:9,color:"#fff"}} onClick={()=>photoInputRefs.current[member]?.click()}>✏</div>
-        <input ref={el=>photoInputRefs.current[member]=el} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handlePhotoUpload(member,e.target.files[0])}/></>}
+        {showUpload&&isEditMode&&<><div style={{position:"absolute",bottom:-2,right:-2,width:16,height:16,borderRadius:"50%",background:"#534AB7",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",border:"1.5px solid #fff",fontSize:9,color:"#fff"}} onClick={()=>photoInputRefs.current[member]?.click()}>✏</div><input ref={el=>photoInputRefs.current[member]=el} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handlePhotoUpload(member,e.target.files[0])}/></>}
       </div>
     );
   };
@@ -306,9 +201,9 @@ export default function Dashboard() {
   const EditBtn=({onClick})=>{ if(!isEditMode)return null; return <button onClick={onClick} style={{flexShrink:0,width:20,height:20,borderRadius:4,border:"0.5px solid #ccc",background:"#f5f5f5",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:11,color:"#666"}}>✏</button>; };
 
   const CompactCard=({t,iso,member})=>{
-    const tt=TASK_TYPES.find(x=>x.id===t.type), df=DIFFICULTY.find(x=>x.id===t.difficulty);
-    const wdTotal=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays,state.leaves[member]||{}):null;
-    const wdRemain=!t.done?workingDaysFromToday(t.deadline,TODAY_ISO,state.holidays,state.leaves[member]||{}):null;
+    const tt=TASK_TYPES.find(x=>x.id===t.type),df=DIFFICULTY.find(x=>x.id===t.difficulty);
+    const wdT=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays||{},(state.leaves||{})[member]||{}):null;
+    const wdR=!t.done?workingDaysFromToday(t.deadline,TODAY_ISO,state.holidays||{},(state.leaves||{})[member]||{}):null;
     return(
       <div style={{borderRadius:6,padding:"4px 6px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":M_BORDER[member]}`,opacity:t.done?0.55:1,marginBottom:2}}>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
@@ -317,10 +212,10 @@ export default function Dashboard() {
             <div style={{fontSize:9,fontWeight:700,color:M_TEXT[member],textTransform:"uppercase",letterSpacing:"0.3px"}}>{member}</div>
             <div style={{fontSize:10,color:t.done?"#888":M_TEXT[member],fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:t.done?"line-through":"none"}}>{t.project}</div>
             <div style={{display:"flex",gap:3,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
-              <span style={{fontSize:8,color:M_TEXT[member],opacity:0.75}}>{tt.label}</span>
-              <span style={{fontSize:8,background:df.bg,color:df.color,border:`0.5px solid ${df.border}`,borderRadius:3,padding:"0 4px"}}>{df.label}·{t.pts}pt</span>
-              {wdTotal!==null&&<span style={{fontSize:8,color:"#888"}}>{wdTotal}wd</span>}
-              {wdRemain!==null&&<span style={{fontSize:8,color:wdRemain<=2?"#A32D2D":"#888",fontWeight:wdRemain<=2?600:400}}>{wdRemain}d left</span>}
+              <span style={{fontSize:8,color:M_TEXT[member],opacity:0.75}}>{tt?.label}</span>
+              <span style={{fontSize:8,background:df?.bg,color:df?.color,border:`0.5px solid ${df?.border}`,borderRadius:3,padding:"0 4px"}}>{df?.label}·{t.pts}pt</span>
+              {wdT!==null&&<span style={{fontSize:8,color:"#888"}}>{wdT}wd</span>}
+              {wdR!==null&&<span style={{fontSize:8,color:wdR<=2?"#A32D2D":"#888",fontWeight:wdR<=2?600:400}}>{wdR}d left</span>}
             </div>
           </div>
           {isEditMode&&<div style={{display:"flex",flexDirection:"column",gap:3}}><EditBtn onClick={()=>openEdit(iso,member,t)}/><button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:10,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:0,lineHeight:1}}>✕</button></div>}
@@ -330,9 +225,9 @@ export default function Dashboard() {
   };
 
   const BoardCard=({t,iso,member})=>{
-    const tt=TASK_TYPES.find(x=>x.id===t.type), df=DIFFICULTY.find(x=>x.id===t.difficulty);
-    const wdTotal=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays,state.leaves[member]||{}):null;
-    const wdRemain=!t.done?workingDaysFromToday(t.deadline,TODAY_ISO,state.holidays,state.leaves[member]||{}):null;
+    const tt=TASK_TYPES.find(x=>x.id===t.type),df=DIFFICULTY.find(x=>x.id===t.difficulty);
+    const wdT=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays||{},(state.leaves||{})[member]||{}):null;
+    const wdR=!t.done?workingDaysFromToday(t.deadline,TODAY_ISO,state.holidays||{},(state.leaves||{})[member]||{}):null;
     const isPast=!t.done&&t.deadline<TODAY_ISO;
     return(
       <div style={{borderRadius:10,padding:"12px 14px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":isPast?"#F09595":M_BORDER[member]}`,borderLeft:`4px solid ${t.done?"#ddd":M_COLOR[member]}`,opacity:t.done?0.6:1,marginBottom:8}}>
@@ -340,16 +235,16 @@ export default function Dashboard() {
           <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={24}/>
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,fontWeight:500,background:M_BG2[member],color:M_TEXT[member],border:`0.5px solid ${M_BORDER[member]}`,borderRadius:4,padding:"2px 8px"}}>{tt.label}</span>
+              <span style={{fontSize:11,fontWeight:500,background:M_BG2[member],color:M_TEXT[member],border:`0.5px solid ${M_BORDER[member]}`,borderRadius:4,padding:"2px 8px"}}>{tt?.label}</span>
               <span style={{fontSize:13,fontWeight:500,flex:1,textDecoration:t.done?"line-through":"none",color:t.done?"#888":"#111"}}>{t.project}</span>
-              <span style={{fontSize:11,background:df.bg,color:df.color,border:`0.5px solid ${df.border}`,borderRadius:4,padding:"2px 8px"}}>{df.label}·{t.pts}pt total</span>
+              <span style={{fontSize:11,background:df?.bg,color:df?.color,border:`0.5px solid ${df?.border}`,borderRadius:4,padding:"2px 8px"}}>{df?.label}·{t.pts}pt</span>
               {isEditMode&&<><EditBtn onClick={()=>openEdit(iso,member,t)}/><button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:12,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:"0 2px"}}>✕</button></>}
             </div>
             <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
               {t.startDate&&<span style={{fontSize:11,color:"#888"}}>▶ <b style={{color:"#111"}}>{t.startDate}</b></span>}
               <span style={{fontSize:11,color:isPast?"#A32D2D":"#888",display:"flex",gap:4,alignItems:"center"}}>🏁 <b style={{color:isPast?"#A32D2D":"#111"}}>{t.deadline}</b>{isPast&&!t.done&&<span style={{fontSize:10,background:"#FCEBEB",color:"#A32D2D",borderRadius:4,padding:"1px 5px"}}>Past</span>}</span>
-              {wdTotal!==null&&<span style={{fontSize:11,color:"#888"}}>📆 <b style={{color:"#111"}}>{wdTotal}</b> working days</span>}
-              {wdRemain!==null&&<span style={{fontSize:11,color:wdRemain<=2?"#A32D2D":"#888"}}>⏳ <b style={{color:wdRemain<=2?"#A32D2D":"#111"}}>{wdRemain}</b> days left</span>}
+              {wdT!==null&&<span style={{fontSize:11,color:"#888"}}>📆 <b style={{color:"#111"}}>{wdT}</b> working days</span>}
+              {wdR!==null&&<span style={{fontSize:11,color:wdR<=2?"#A32D2D":"#888"}}>⏳ <b style={{color:wdR<=2?"#A32D2D":"#111"}}>{wdR}</b> days left</span>}
               {t.done&&<span style={{fontSize:11,background:"#EAF3DE",color:"#3B6D11",borderRadius:6,padding:"2px 8px"}}>✓ Completed</span>}
             </div>
           </div>
@@ -359,9 +254,9 @@ export default function Dashboard() {
   };
 
   const DayCell=({day})=>{
-    const iso=isoDate(day), weekend=isWeekend(day), holiday=state.holidays[iso], isToday=iso===TODAY_ISO;
-    const dayTasks=getDay(iso), activeDots=MEMBERS.filter(m=>isActiveTaskDay(iso,m));
-    const lL=state.leaves.Leo?.[iso], sL=state.leaves.Shen?.[iso], rL=state.leaves.Raha?.[iso];
+    const iso=isoDate(day),weekend=isWeekend(day),holiday=(state.holidays||{})[iso],isToday=iso===TODAY_ISO;
+    const dayTasks=getDay(iso),activeDots=MEMBERS.filter(m=>isActiveTaskDay(iso,m));
+    const lL=(state.leaves||{}).Leo?.[iso],sL=(state.leaves||{}).Shen?.[iso],rL=(state.leaves||{}).Raha?.[iso];
     return(
       <div style={{minHeight:110,borderRadius:8,border:isToday?"2px solid #534AB7":"0.5px solid #ddd",background:weekend?"#ECEAE4":holiday?"#FDF3E0":"#fff",padding:"6px 7px",display:"flex",flexDirection:"column",gap:2}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:1}}>
@@ -386,7 +281,7 @@ export default function Dashboard() {
 
   const WeekStrip=({wDays,label})=>{
     const loads=MEMBERS.map(m=>({m,load:weekLoad(m,wDays)}));
-    const workdays=wDays.filter(d=>!isWeekend(d)&&!state.holidays[isoDate(d)]).length;
+    const workdays=wDays.filter(d=>!isWeekend(d)&&!(state.holidays||{})[isoDate(d)]).length;
     return(
       <div style={{marginBottom:18}}>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
@@ -446,11 +341,11 @@ export default function Dashboard() {
     </div>
   );
 
-  if(loading) return(
+  if(loading)return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,flexDirection:"column",gap:12,color:"#888"}}>
       <div style={{width:32,height:32,border:"3px solid #eee",borderTop:"3px solid #534AB7",borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <span style={{fontSize:13}}>Connecting to database...</span>
+      <span style={{fontSize:13}}>Loading dashboard...</span>
     </div>
   );
 
@@ -459,17 +354,16 @@ export default function Dashboard() {
       {showPwModal&&<PasswordModal/>}
       <EditModal/>
 
-      {/* HERO HEADER */}
-      <div style={{background:"linear-gradient(135deg,#1a1040 0%,#2d1b69 50%,#1a3a2a 100%)",borderRadius:"0 0 20px 20px",padding:"24px 24px 0",marginBottom:0}}>
+      <div style={{background:"linear-gradient(135deg,#1a1040 0%,#2d1b69 50%,#1a3a2a 100%)",borderRadius:"0 0 20px 20px",padding:"24px 24px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
           <div>
-            <h2 style={{margin:0,fontSize:22,fontWeight:600,color:"#fff",letterSpacing:"-0.3px"}}>3D Team Dashboard</h2>
+            <h2 style={{margin:0,fontSize:22,fontWeight:600,color:"#fff"}}>3D Team Dashboard</h2>
             <p style={{margin:"4px 0 0",fontSize:12,color:"rgba(255,255,255,0.55)"}}>Workload and Calendar Tracker · Philippines Time</p>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:11,color:saveStatus==="error"?"#F09595":saveStatus==="saving"?"#FAC775":"rgba(255,255,255,0.4)",display:"flex",alignItems:"center",gap:4}}>
               <span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:saveStatus==="error"?"#E24B4A":saveStatus==="saving"?"#EF9F27":"#639922"}}/>
-              {saveStatus==="saving"?"Syncing…":saveStatus==="error"?"Sync failed":"Synced"}
+              {saveStatus==="saving"?"Saving…":saveStatus==="error"?"Save failed":"Saved"}
             </span>
             {isEditMode
               ?<button onClick={()=>setIsEditMode(false)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(159,225,203,0.2)",color:"#9FE1CB",border:"1px solid rgba(159,225,203,0.4)"}}>✓ Editing — Lock</button>
@@ -477,15 +371,14 @@ export default function Dashboard() {
             }
           </div>
         </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:0}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
           {MEMBERS.map(m=>{
             const w1l=weekLoad(m,week1),w2l=weekLoad(m,week2);
             const over=w1l>=10||w2l>=10,mod=w1l>=6||w2l>=6;
             const badge=over?{bg:"rgba(242,74,74,0.2)",text:"#F09595",label:"Heavy"}:mod?{bg:"rgba(239,159,39,0.2)",text:"#FAC775",label:"Moderate"}:{bg:"rgba(99,153,34,0.2)",text:"#9FE1CB",label:"Light"};
-            const leaveDays=Object.keys(state.leaves[m]||{}).filter(d=>{const dd=new Date(d+"T00:00:00");return dd>=days[0]&&dd<=days[13];});
+            const leaveDays=Object.keys((state.leaves||{})[m]||{}).filter(d=>{ const dd=new Date(d+"T00:00:00"); return dd>=days[0]&&dd<=days[13]; });
             return(
-              <div key={m} style={{background:"rgba(255,255,255,0.08)",borderRadius:"14px 14px 0 0",padding:"16px",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.12)",borderBottom:"none"}}>
+              <div key={m} style={{background:"rgba(255,255,255,0.08)",borderRadius:"14px 14px 0 0",padding:"16px",border:"1px solid rgba(255,255,255,0.12)",borderBottom:"none"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                   <Avatar member={m} size={42} showUpload={true}/>
                   <div style={{flex:1}}>
@@ -504,23 +397,21 @@ export default function Dashboard() {
                   <div style={{height:"100%",width:`${Math.min(100,Math.max(w1l,w2l)/12*100)}%`,background:over?"#E24B4A":mod?"#EF9F27":M_COLOR[m],borderRadius:4,transition:"width .4s"}}/>
                 </div>
                 {leaveDays.length>0&&<div style={{marginTop:6,fontSize:10,color:"#FAC775"}}>🏖 {leaveDays.length} leave day{leaveDays.length>1?"s":""}</div>}
-                {isEditMode&&state.photos[m]&&<button onClick={()=>removePhoto(m)} style={{marginTop:6,fontSize:10,background:"rgba(255,255,255,0.1)",border:"none",borderRadius:4,color:"rgba(255,255,255,0.5)",cursor:"pointer",padding:"2px 6px"}}>Remove photo</button>}
+                {isEditMode&&(state.photos||{})[m]&&<button onClick={()=>removePhoto(m)} style={{marginTop:6,fontSize:10,background:"rgba(255,255,255,0.1)",border:"none",borderRadius:4,color:"rgba(255,255,255,0.5)",cursor:"pointer",padding:"2px 6px"}}>Remove photo</button>}
               </div>
             );
           })}
         </div>
-
-        <div style={{display:"flex",gap:0,marginTop:0,paddingTop:4}}>
+        <div style={{display:"flex",gap:0,paddingTop:4}}>
           {[["calendar","📅 Calendar"],["board","📋 Board"]].map(([key,lbl])=>(
             <button key={key} onClick={()=>setTab(key)} style={{flex:1,fontSize:13,fontWeight:tab===key?600:400,padding:"12px 0",cursor:"pointer",background:tab===key?"#fff":"transparent",color:tab===key?"#111":"rgba(255,255,255,0.55)",border:"none",borderRadius:tab===key?"10px 10px 0 0":"0",transition:"all .2s"}}>{lbl}</button>
           ))}
         </div>
       </div>
 
-      {/* CONTENT */}
       <div style={{background:"#fff",borderRadius:"0 0 16px 16px",padding:"20px",border:"1px solid #eee",borderTop:"none",marginBottom:16}}>
         {!isEditMode&&<div style={{background:"#f9f9f9",border:"0.5px solid #eee",borderRadius:8,padding:"8px 14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#888"}}>👁 View only — tasks and calendar are read-only.</span><button onClick={()=>setShowPwModal(true)} style={{fontSize:11,color:"#534AB7",background:"none",border:"0.5px solid #AFA9EC",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>Unlock editing</button></div>}
-        {bothHeavy&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:10,padding:"10px 16px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:13,fontWeight:500,color:"#A32D2D"}}>⚠ Team overloaded — consider redistributing or bringing in Raha</span><button onClick={()=>setShowSuggest(s=>!s)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #E06060",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>{showSuggest?"Hide":"Suggestions"}</button></div>{showSuggest&&<ul style={{margin:"8px 0 0",paddingLeft:16,fontSize:12,color:"#793030",lineHeight:2}}><li>Assign overflow tasks to Raha.</li><li>Push lower-priority revisions to next week.</li><li>Stagger venue oculars.</li></ul>}</div>}
+        {bothHeavy&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:10,padding:"10px 16px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:13,fontWeight:500,color:"#A32D2D"}}>⚠ Team overloaded — consider redistributing or bringing in Raha</span><button onClick={()=>setShowSuggest(s=>!s)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #E06060",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>{showSuggest?"Hide":"Suggestions"}</button></div>{showSuggest&&<ul style={{margin:"8px 0 0",paddingLeft:16,fontSize:12,color:"#793030",lineHeight:2}}><li>Assign overflow to Raha.</li><li>Push lower-priority revisions to next week.</li><li>Stagger venue oculars.</li></ul>}</div>}
         {overlaps.length>0&&<div style={{background:"#FBEAF0",border:"0.5px solid #ED93B1",borderRadius:10,padding:"10px 16px",marginBottom:10}}><p style={{margin:"0 0 4px",fontSize:13,fontWeight:500,color:"#993556"}}>📅 Deadline overlaps detected</p>{overlaps.map(([date,arr])=><p key={date} style={{margin:"2px 0",fontSize:12,color:"#72243E"}}><b>{date}</b> — {arr.map(t=>`${t.member}: ${t.project}`).join(" · ")}</p>)}</div>}
 
         {tab==="calendar"&&<div>
@@ -551,12 +442,7 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          {(()=>{
-            const mt=allTasks.filter(t=>t.member===boardMember).sort((a,b)=>a.deadline.localeCompare(b.deadline));
-            const active=mt.filter(t=>!t.done), done=mt.filter(t=>t.done);
-            if(!mt.length)return<div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><p style={{fontSize:13}}>No tasks assigned to {boardMember} yet.</p></div>;
-            return<>{active.length>0&&<div style={{marginBottom:16}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 8px",color:"#888"}}>Active — {active.length} task{active.length!==1?"s":""}</p>{active.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</div>}{done.length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 8px",color:"#3B6D11"}}>✓ Completed — {done.length} task{done.length!==1?"s":""}</p>{done.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</div>}</>;
-          })()}
+          {(()=>{ const mt=allTasks.filter(t=>t.member===boardMember).sort((a,b)=>a.deadline.localeCompare(b.deadline)); const active=mt.filter(t=>!t.done),done=mt.filter(t=>t.done); if(!mt.length)return<div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><p style={{fontSize:13}}>No tasks assigned to {boardMember} yet.</p></div>; return<>{active.length>0&&<div style={{marginBottom:16}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 8px",color:"#888"}}>Active — {active.length} task{active.length!==1?"s":""}</p>{active.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</div>}{done.length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 8px",color:"#3B6D11"}}>✓ Completed — {done.length} task{done.length!==1?"s":""}</p>{done.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</div>}</>; })()}
         </div>}
       </div>
 
@@ -579,13 +465,13 @@ export default function Dashboard() {
           <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Leave date</label><input type="date" value={leaveForm.date} onChange={e=>setLeaveForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
         </div>
         <button onClick={addLeave} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Mark leave day</button>
-        {MEMBERS.map(m=>{ const leaveDays=Object.keys(state.leaves[m]||{}).sort(); if(!leaveDays.length)return null; return<div key={m} style={{marginBottom:10}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>{m}'s leave days</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{leaveDays.map(d=><span key={d} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:`0.5px solid ${M_BORDER[m]}`}}>{d}<button onClick={()=>removeLeave(m,d)} style={{background:"#fff",border:`1px solid ${M_BORDER[m]}`,borderRadius:"50%",width:16,height:16,cursor:"pointer",color:M_TEXT[m],fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>; })}</>}
+        {MEMBERS.map(m=>{ const ld=Object.keys((state.leaves||{})[m]||{}).sort(); if(!ld.length)return null; return<div key={m} style={{marginBottom:10}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>{m}'s leave days</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{ld.map(d=><span key={d} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:`0.5px solid ${M_BORDER[m]}`}}>{d}<button onClick={()=>removeLeave(m,d)} style={{background:"#fff",border:`1px solid ${M_BORDER[m]}`,borderRadius:"50%",width:16,height:16,cursor:"pointer",color:M_TEXT[m],fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>; })}</>}
         {formTab==="holiday"&&<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Date</label><input type="date" value={holForm.date} onChange={e=>setHolForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
           <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Holiday name</label><input value={holForm.label} onChange={e=>setHolForm(f=>({...f,label:e.target.value}))} placeholder="e.g. Holy Week" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
         </div>
         <button onClick={addHoliday} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Add holiday</button>
-        {Object.keys(state.holidays).length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>Marked holidays</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{Object.entries(state.holidays).sort().map(([d,lbl])=><span key={d} style={{fontSize:11,background:"#FAEEDA",color:"#854F0B",borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:"0.5px solid #EF9F27"}}>{d} · {lbl}<button onClick={()=>removeHoliday(d)} style={{background:"#fff",border:"1px solid #EF9F27",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:"#854F0B",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>}</>}
+        {Object.keys(state.holidays||{}).length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>Marked holidays</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{Object.entries(state.holidays||{}).sort().map(([d,lbl])=><span key={d} style={{fontSize:11,background:"#FAEEDA",color:"#854F0B",borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:"0.5px solid #EF9F27"}}>{d} · {lbl}<button onClick={()=>removeHoliday(d)} style={{background:"#fff",border:"1px solid #EF9F27",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:"#854F0B",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>}</>}
       </div>}
 
       <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 0 16px"}}>
