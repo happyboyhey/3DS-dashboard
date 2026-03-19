@@ -1,50 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
+const STORAGE_KEY   = "3d-team-dashboard-state";
 const SUPABASE_URL  = "https://wtlqchkpmjuftgtqrtbq.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0bHFjaGtwbWp1ZnRndHFydGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODQ5MjAsImV4cCI6MjA4OTQ2MDkyMH0.jRH0otPxIJqJrEvGqyFEb_9D70XtBT5Jis1v4lTj284";
 const DB_KEY        = "3ds-dashboard-v1";
-const HEADERS       = { "Content-Type": "application/json", "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}` };
-const DB_URL        = `${SUPABASE_URL}/rest/v1/dashboard`;
-const RT_URL        = `${SUPABASE_URL}/realtime/v1/websocket?apikey=${SUPABASE_ANON}&vsn=1.0.0`;
-
-// Lightweight Supabase REST + Realtime (no SDK needed)
-const supabase = {
-  async load() {
-    const res = await fetch(`${DB_URL}?id=eq.${DB_KEY}&select=data`, { headers: HEADERS });
-    const rows = await res.json();
-    return rows?.[0]?.data || null;
-  },
-  async save(data) {
-    await fetch(`${DB_URL}?id=eq.${DB_KEY}`, {
-      method: "PATCH",
-      headers: { ...HEADERS, "Prefer": "return=minimal" },
-      body: JSON.stringify({ data })
-    });
-  },
-  async init(data) {
-    // Insert row if it doesn't exist
-    await fetch(DB_URL, {
-      method: "POST",
-      headers: { ...HEADERS, "Prefer": "ignore-duplicates" },
-      body: JSON.stringify({ id: DB_KEY, data })
-    });
-  },
-  subscribe(onUpdate) {
-    const ws = new WebSocket(RT_URL);
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ topic: "realtime:public:dashboard", event: "phx_join", payload: {}, ref: "1" }));
-    };
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.event === "postgres_changes" && msg.payload?.data?.record?.id === DB_KEY) {
-        const fresh = msg.payload.data.record.data;
-        onUpdate(typeof fresh === "string" ? JSON.parse(fresh) : fresh);
-      }
-    };
-    ws.onerror = () => {}; // silent fail, data still loads/saves via REST
-    return () => ws.close();
-  }
-};
+const API           = `${SUPABASE_URL}/rest/v1/dashboard`;
+const HDRS          = { "Content-Type": "application/json", "apikey": SUPABASE_ANON, "Authorization": `Bearer ${SUPABASE_ANON}`, "Prefer": "return=minimal" };
 
 const TASK_TYPES = [
   { id: "pitch",     label: "Pitch Design"    },
@@ -167,44 +128,80 @@ export default function Dashboard() {
   useEffect(()=>{ setFavicon(); },[]);
   useEffect(()=>{ setWindowOffset(0); },[TODAY_ISO]);
 
-  // ── Load from Supabase ──
-  useEffect(()=>{
+  // ── Load: try Supabase first, fall back to localStorage ──
+  useEffect(() => {
     const load = async () => {
       try {
-        await supabase.init(JSON.stringify(DEFAULT_STATE)); // ensure row exists
-        const raw = await supabase.load();
-        if(raw){
-          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-          parsed.leaves = parsed.leaves||{};
-          parsed.photos = parsed.photos||{};
-          MEMBERS.forEach(m=>{ parsed.leaves[m]=parsed.leaves[m]||{}; parsed.photos[m]=parsed.photos[m]||""; });
+        const res = await fetch(`${API}?id=eq.${DB_KEY}&select=data`, { headers: HDRS });
+        const rows = await res.json();
+        if (rows?.[0]?.data) {
+          const parsed = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
+          parsed.leaves = parsed.leaves || {};
+          parsed.photos = parsed.photos || {};
+          MEMBERS.forEach(m => { parsed.leaves[m] = parsed.leaves[m] || {}; parsed.photos[m] = parsed.photos[m] || ""; });
+          setState(parsed);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {}
+      // fallback to localStorage
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          parsed.leaves = parsed.leaves || {};
+          parsed.photos = parsed.photos || {};
+          MEMBERS.forEach(m => { parsed.leaves[m] = parsed.leaves[m] || {}; parsed.photos[m] = parsed.photos[m] || ""; });
           setState(parsed);
         }
-      } catch(e){ console.warn("Load error:",e); }
+      } catch (e) {}
       setLoading(false);
     };
     load();
-  },[]);
+  }, []);
 
-  // ── Real-time listener ──
-  useEffect(()=>{
-    const unsub = supabase.subscribe((fresh)=>{
-      fresh.leaves = fresh.leaves||{};
-      fresh.photos = fresh.photos||{};
-      MEMBERS.forEach(m=>{ fresh.leaves[m]=fresh.leaves[m]||{}; fresh.photos[m]=fresh.photos[m]||""; });
-      setState(fresh);
-      setSaveStatus("saved");
-    });
-    return unsub;
-  },[]);
+  // ── Poll Supabase every 5 seconds for real-time sync ──
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API}?id=eq.${DB_KEY}&select=data`, { headers: HDRS });
+        const rows = await res.json();
+        if (rows?.[0]?.data) {
+          const fresh = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
+          fresh.leaves = fresh.leaves || {};
+          fresh.photos = fresh.photos || {};
+          MEMBERS.forEach(m => { fresh.leaves[m] = fresh.leaves[m] || {}; fresh.photos[m] = fresh.photos[m] || ""; });
+          setState(prev => JSON.stringify(prev) !== JSON.stringify(fresh) ? fresh : prev);
+        }
+      } catch (e) {}
+    };
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // ── Save to Supabase (debounced) ──
+  // ── Save to Supabase + localStorage (debounced) ──
   const saveToSupabase = async (newState) => {
     setSaveStatus("saving");
+    // always save to localStorage as backup
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(newState)); } catch (e) {}
+    // try Supabase
     try {
-      await supabase.save(JSON.stringify(newState));
+      // try PATCH first
+      const patch = await fetch(`${API}?id=eq.${DB_KEY}`, {
+        method: "PATCH", headers: HDRS, body: JSON.stringify({ data: JSON.stringify(newState) })
+      });
+      if (!patch.ok) throw new Error("patch failed");
       setSaveStatus("saved");
-    } catch(e){ console.error("Save error:",e); setSaveStatus("error"); }
+    } catch (e) {
+      try {
+        // if PATCH failed, try POST (insert)
+        await fetch(API, {
+          method: "POST", headers: { ...HDRS, "Prefer": "ignore-duplicates" },
+          body: JSON.stringify({ id: DB_KEY, data: JSON.stringify(newState) })
+        });
+        setSaveStatus("saved");
+      } catch (e2) { setSaveStatus("error"); }
+    }
   };
 
   const updateState = (newState) => {
