@@ -412,6 +412,9 @@ export default function Dashboard() {
               <span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:saveStatus==="error"?"#E24B4A":saveStatus==="saving"?"#EF9F27":"#639922"}}/>
               {saveStatus==="saving"?"Saving…":saveStatus==="error"?"Save failed":"Saved"}
             </span>
+            {isEditMode && (
+              <button onClick={async()=>{ setSaveStatus("saving"); await saveToCloud(state); setSaveStatus("saved"); alert("✅ Data synced to cloud! Team members can refresh to see updates."); }} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(99,153,34,0.3)",color:"#9FE1CB",border:"1px solid rgba(99,153,34,0.5)"}}>☁ Sync to cloud</button>
+            )}
             {isEditMode
               ?<button onClick={()=>setIsEditMode(false)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(159,225,203,0.2)",color:"#9FE1CB",border:"1px solid rgba(159,225,203,0.4)"}}>✓ Editing — Lock</button>
               :<button onClick={()=>setShowPwModal(true)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.2)"}}>🔒 View only</button>
