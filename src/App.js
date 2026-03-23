@@ -1,39 +1,39 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
-// ── JSONBin shared database ──
-const BIN_ID  = "69c0bf0eb7ec241ddc934cd7";
-const API_KEY = "$2a$10$IODjVZyYVUW5zIEv5yPMSekG7DxtwTSeWTIw5I2knBH3MJ4o4g1di";
-const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-const HEADERS = {
+// ── Supabase shared database (plain fetch, no SDK) ──
+const STORAGE_KEY  = "3d-team-dashboard-state";
+const SB_URL       = "https://wtlqchkpmjuftgtqrtbq.supabase.co/rest/v1/dashboard";
+const SB_KEY       = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0bHFjaGtwbWp1ZnRndHFydGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODQ5MjAsImV4cCI6MjA4OTQ2MDkyMH0.jRH0otPxIJqJrEvGqyFEb_9D70XtBT5Jis1v4lTj284";
+const DB_ID        = "3ds-dashboard-v1";
+const SB_HEADERS   = {
   "Content-Type": "application/json",
-  "X-Master-Key": API_KEY,
-  "X-Bin-Meta": "false"
+  "apikey": SB_KEY,
+  "Authorization": `Bearer ${SB_KEY}`
 };
 
 async function loadFromCloud() {
   try {
-    const res = await fetch(BIN_URL + "/latest", {
-      method: "GET",
-      headers: HEADERS
-    });
+    const res = await fetch(`${SB_URL}?id=eq.${DB_ID}&select=data`, { headers: SB_HEADERS });
     if (!res.ok) return null;
-    const data = await res.json();
-    return data && data.tasks !== undefined ? data : null;
+    const rows = await res.json();
+    if (!rows || !rows[0]) return null;
+    const parsed = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
+    return parsed && parsed.tasks !== undefined ? parsed : null;
   } catch(e) { return null; }
 }
 
 async function saveToCloud(state) {
   try {
-    const res = await fetch(BIN_URL, {
-      method: "PUT",
-      headers: HEADERS,
-      body: JSON.stringify(state)
+    const body = JSON.stringify({ id: DB_ID, data: JSON.stringify(state) });
+    // Try UPSERT (insert or update in one call)
+    const res = await fetch(SB_URL, {
+      method: "POST",
+      headers: { ...SB_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body
     });
-    return res.ok;
+    return res.ok || res.status === 201;
   } catch(e) { return false; }
 }
-
-const TASK_TYPES = [
   { id: "pitch",     label: "Pitch Design"    },
   { id: "execution", label: "Execution Design" },
   { id: "revision",  label: "Design Revisions" },
