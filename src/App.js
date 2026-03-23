@@ -54,7 +54,6 @@ const M_BG2    = { Leo: "#CECBF6", Shen: "#9FE1CB", Raha: "#F4C0D1" };
 const M_TEXT   = { Leo: "#534AB7", Shen: "#0F6E56", Raha: "#993556" };
 const M_BORDER = { Leo: "#AFA9EC", Shen: "#5DCAA5", Raha: "#ED93B1" };
 const M_ROLE   = { Leo: "3D Artist", Shen: "3D Artist", Raha: "Freelancer" };
-const STORAGE_KEY   = "3d-team-dashboard-state";
 const EDIT_PASSWORD = "3dteam2026";
 const DEFAULT_STATE = { tasks:{}, holidays:{}, leaves:{Leo:{},Shen:{},Raha:{}}, photos:{Leo:"",Shen:"",Raha:""} };
 
