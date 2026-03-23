@@ -1,6 +1,25 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
-const TASK_TYPES = [
+// ── JSONBin shared database ──
+const BIN_ID  = "69c0aeb6b7ec241ddc931592";
+const API_KEY = "$2a$10$IODjVZyYVUW5zIEv5yPMSekG7DxtwTSeWTIw5I2knBH3MJ4o4g1di";
+const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+const HEADERS = { "Content-Type": "application/json", "X-Master-Key": API_KEY, "X-Bin-Meta": "false" };
+
+async function loadFromCloud() {
+  try {
+    const res = await fetch(BIN_URL + "/latest", { headers: HEADERS });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.tasks !== undefined ? data : null;
+  } catch(e) { return null; }
+}
+
+async function saveToCloud(state) {
+  try {
+    await fetch(BIN_URL, { method: "PUT", headers: HEADERS, body: JSON.stringify(state) });
+  } catch(e) {}
+}
   { id: "pitch",     label: "Pitch Design"    },
   { id: "execution", label: "Execution Design" },
   { id: "revision",  label: "Design Revisions" },
@@ -100,26 +119,54 @@ export default function Dashboard() {
   useEffect(()=>{ setWindowOffset(0); },[TODAY_ISO]);
 
   useEffect(()=>{
-    try {
-      const saved=localStorage.getItem(STORAGE_KEY);
-      if(saved){
-        const p=JSON.parse(saved);
-        p.leaves=p.leaves||{}; p.photos=p.photos||{};
-        MEMBERS.forEach(m=>{ p.leaves[m]=p.leaves[m]||{}; p.photos[m]=p.photos[m]||""; });
-        setState(p);
+    const load = async () => {
+      // Try cloud first
+      const cloud = await loadFromCloud();
+      if (cloud) {
+        cloud.leaves = cloud.leaves||{}; cloud.photos = cloud.photos||{};
+        MEMBERS.forEach(m=>{ cloud.leaves[m]=cloud.leaves[m]||{}; cloud.photos[m]=cloud.photos[m]||""; });
+        setState(cloud);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloud));
+      } else {
+        // Fall back to localStorage
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const p = JSON.parse(saved);
+            p.leaves=p.leaves||{}; p.photos=p.photos||{};
+            MEMBERS.forEach(m=>{ p.leaves[m]=p.leaves[m]||{}; p.photos[m]=p.photos[m]||""; });
+            setState(p);
+          }
+        } catch(e) {}
       }
-    } catch(e){}
-    setLoading(false);
+      setLoading(false);
+    };
+    load();
+  },[]);
+
+  // Poll cloud every 10 seconds for changes from other users
+  useEffect(()=>{
+    const poll = async () => {
+      const cloud = await loadFromCloud();
+      if (cloud) {
+        cloud.leaves=cloud.leaves||{}; cloud.photos=cloud.photos||{};
+        MEMBERS.forEach(m=>{ cloud.leaves[m]=cloud.leaves[m]||{}; cloud.photos[m]=cloud.photos[m]||""; });
+        setState(prev => JSON.stringify(prev)!==JSON.stringify(cloud) ? cloud : prev);
+      }
+    };
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
   },[]);
 
   useEffect(()=>{
     if(loading) return;
     if(saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(()=>{
-      try { localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); setSaveStatus("saved"); }
-      catch(e){ setSaveStatus("error"); }
-    },600);
-  },[state,loading]);
+    saveTimer.current = setTimeout(()=>{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      saveToCloud(state);
+      setSaveStatus("saved");
+    }, 800);
+  },[state, loading]);
 
   const updateState=ns=>{ setState(ns); };
   const handleUnlock=()=>{ if(pwInput===EDIT_PASSWORD){setIsEditMode(true);setShowPwModal(false);setPwInput("");setPwError(false);}else{setPwError(true);setPwInput("");} };
