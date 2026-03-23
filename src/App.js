@@ -32,6 +32,8 @@ async function saveToCloud(state) {
     return res.ok;
   } catch(e) { return false; }
 }
+
+const TASK_TYPES = [
   { id: "pitch",     label: "Pitch Design"    },
   { id: "execution", label: "Execution Design" },
   { id: "revision",  label: "Design Revisions" },
