@@ -4,11 +4,19 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 const BIN_ID  = "69c0aeb6b7ec241ddc931592";
 const API_KEY = "$2a$10$IODjVZyYVUW5zIEv5yPMSekG7DxtwTSeWTIw5I2knBH3MJ4o4g1di";
 const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-const HEADERS = { "Content-Type": "application/json", "X-Master-Key": API_KEY, "X-Bin-Meta": "false" };
+const HEADERS = {
+  "Content-Type": "application/json",
+  "X-Master-Key": API_KEY,
+  "X-Bin-Meta": "false",
+  "X-Access-Key": API_KEY
+};
 
 async function loadFromCloud() {
   try {
-    const res = await fetch(BIN_URL + "/latest", { headers: HEADERS });
+    const res = await fetch(BIN_URL + "/latest", {
+      method: "GET",
+      headers: HEADERS
+    });
     if (!res.ok) return null;
     const data = await res.json();
     return data && data.tasks !== undefined ? data : null;
@@ -17,8 +25,13 @@ async function loadFromCloud() {
 
 async function saveToCloud(state) {
   try {
-    await fetch(BIN_URL, { method: "PUT", headers: HEADERS, body: JSON.stringify(state) });
-  } catch(e) {}
+    const res = await fetch(BIN_URL, {
+      method: "PUT",
+      headers: HEADERS,
+      body: JSON.stringify(state)
+    });
+    return res.ok;
+  } catch(e) { return false; }
 }
   { id: "pitch",     label: "Pitch Design"    },
   { id: "execution", label: "Execution Design" },
@@ -413,7 +426,12 @@ export default function Dashboard() {
               {saveStatus==="saving"?"Saving…":saveStatus==="error"?"Save failed":"Saved"}
             </span>
             {isEditMode && (
-              <button onClick={async()=>{ setSaveStatus("saving"); await saveToCloud(state); setSaveStatus("saved"); alert("✅ Data synced to cloud! Team members can refresh to see updates."); }} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(99,153,34,0.3)",color:"#9FE1CB",border:"1px solid rgba(99,153,34,0.5)"}}>☁ Sync to cloud</button>
+              <button onClick={async()=>{
+                setSaveStatus("saving");
+                const ok = await saveToCloud(state);
+                setSaveStatus("saved");
+                alert(ok ? "✅ Synced to cloud! Team can refresh to see updates." : "❌ Sync failed — check internet connection.");
+              }} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(99,153,34,0.3)",color:"#9FE1CB",border:"1px solid rgba(99,153,34,0.5)"}}>☁ Sync to cloud</button>
             )}
             {isEditMode
               ?<button onClick={()=>setIsEditMode(false)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(159,225,203,0.2)",color:"#9FE1CB",border:"1px solid rgba(159,225,203,0.4)"}}>✓ Editing — Lock</button>
