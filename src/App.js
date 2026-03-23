@@ -1,14 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
 // ── JSONBin shared database ──
-const BIN_ID  = "69c0aeb6b7ec241ddc931592";
+const BIN_ID  = "69c0bf0eb7ec241ddc934cd7";
 const API_KEY = "$2a$10$IODjVZyYVUW5zIEv5yPMSekG7DxtwTSeWTIw5I2knBH3MJ4o4g1di";
 const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 const HEADERS = {
   "Content-Type": "application/json",
   "X-Master-Key": API_KEY,
-  "X-Bin-Meta": "false",
-  "X-Access-Key": API_KEY
+  "X-Bin-Meta": "false"
 };
 
 async function loadFromCloud() {
