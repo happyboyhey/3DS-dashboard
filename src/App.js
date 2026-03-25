@@ -1,14 +1,21 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
+// ── Supabase shared database ──
 const STORAGE_KEY = "3d-team-dashboard-v2";
 const SB_URL      = "https://wtlqchkpmjuftgtqrtbq.supabase.co/rest/v1/dashboard";
 const SB_KEY      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0bHFjaGtwbWp1ZnRndHFydGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODQ5MjAsImV4cCI6MjA4OTQ2MDkyMH0.jRH0otPxIJqJrEvGqyFEb_9D70XtBT5Jis1v4lTj284";
 const DB_ID       = "3ds-capacity-v1";
 const SB_HEADERS  = {"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
 
+// Background image (iridescent liquid metal)
+const BG_IMAGE = "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=1400&q=80";
+
 async function loadFromCloud() {
   try {
-    const res = await fetch(`${SB_URL}?id=eq.${DB_ID}&select=data`,{headers:SB_HEADERS});
+    const ctrl = new AbortController();
+    const timeout = setTimeout(()=>ctrl.abort(), 5000);
+    const res = await fetch(`${SB_URL}?id=eq.${DB_ID}&select=data`,{headers:SB_HEADERS, signal:ctrl.signal});
+    clearTimeout(timeout);
     if(!res.ok) return null;
     const rows = await res.json();
     if(!rows||!rows[0]) return null;
@@ -125,13 +132,27 @@ export default function Dashboard() {
   useEffect(()=>{setWindowOffset(0);},[TODAY_ISO]);
 
   useEffect(()=>{
-    const load=async()=>{
-      const cloud=await loadFromCloud();
-      if(cloud){cloud.leaves=cloud.leaves||{};cloud.photos=cloud.photos||{};MEMBERS.forEach(m=>{cloud.leaves[m]=cloud.leaves[m]||{};cloud.photos[m]=cloud.photos[m]||"";});setState(cloud);localStorage.setItem(STORAGE_KEY,JSON.stringify(cloud));}
-      else{try{const saved=localStorage.getItem(STORAGE_KEY);if(saved){const p=JSON.parse(saved);p.leaves=p.leaves||{};p.photos=p.photos||{};MEMBERS.forEach(m=>{p.leaves[m]=p.leaves[m]||{};p.photos[m]=p.photos[m]||"";});setState(p);}}catch(e){}}
-      setLoading(false);
-    };
-    load();
+    // Load localStorage immediately so dashboard shows right away
+    try {
+      const saved=localStorage.getItem(STORAGE_KEY);
+      if(saved){
+        const p=JSON.parse(saved);
+        p.leaves=p.leaves||{};p.photos=p.photos||{};
+        MEMBERS.forEach(m=>{p.leaves[m]=p.leaves[m]||{};p.photos[m]=p.photos[m]||"";});
+        setState(p);
+      }
+    } catch(e){}
+    setLoading(false); // Always stop loading immediately
+
+    // Then try cloud in background (non-blocking)
+    loadFromCloud().then(cloud=>{
+      if(cloud){
+        cloud.leaves=cloud.leaves||{};cloud.photos=cloud.photos||{};
+        MEMBERS.forEach(m=>{cloud.leaves[m]=cloud.leaves[m]||{};cloud.photos[m]=cloud.photos[m]||"";});
+        setState(cloud);
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(cloud));
+      }
+    }).catch(()=>{});
   },[]);
 
   useEffect(()=>{
@@ -246,7 +267,7 @@ export default function Dashboard() {
     const dLeft=!t.done?daysUntil(t.deadline,TODAY_ISO):null;
     const isPast=!t.done&&t.deadline<TODAY_ISO;
     return(
-      <div style={{borderRadius:10,padding:"10px 12px",background:t.done?"#f9f9f9":M_BG[member],opacity:t.done?0.6:1,marginBottom:8,border:`1px solid ${t.done?"#eee":isPast?"#F09595":M_BORDER[member]}`,borderLeft:`4px solid ${t.done?"#ddd":M_COLOR[member]}`}}>
+      <div style={{borderRadius:10,padding:"10px 12px",background:t.done?"#f9f9f9":t.side==="execution"?"#E1F5EE":M_BG[member],opacity:t.done?0.6:1,marginBottom:8,border:`1px solid ${t.done?"#eee":isPast?"#F09595":t.side==="execution"?"#5DCAA5":M_BORDER[member]}`,borderLeft:`4px solid ${t.done?"#ddd":t.side==="execution"?"#0F6E56":M_COLOR[member]}`}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
           <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={20}/>
           <div style={{flex:1,minWidth:0}}>
@@ -430,7 +451,15 @@ export default function Dashboard() {
       <EditModal/>
 
       {/* ── HEADER ── */}
-      <div style={{background:"linear-gradient(135deg,#1a1040 0%,#2d1b69 50%,#1a3a2a 100%)",borderRadius:"0 0 20px 20px",padding:"24px 24px 0"}}>
+      <div style={{position:"relative",borderRadius:"0 0 24px 24px",overflow:"hidden",marginBottom:0}}>
+        {/* Background image */}
+        <div style={{position:"absolute",inset:0,backgroundImage:`url(${BG_IMAGE})`,backgroundSize:"cover",backgroundPosition:"center 40%",filter:"brightness(0.35) saturate(1.4)",zIndex:0}}/>
+        {/* Iridescent overlay */}
+        <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,rgba(26,16,64,0.82) 0%,rgba(45,27,105,0.6) 40%,rgba(15,110,86,0.55) 100%)",zIndex:1}}/>
+        {/* Subtle bottom fade */}
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:80,background:"linear-gradient(to bottom,transparent,rgba(10,8,30,0.5))",zIndex:2}}/>
+
+        <div style={{position:"relative",zIndex:3,padding:"28px 24px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
           <div>
             <h2 style={{margin:0,fontSize:22,fontWeight:700,color:"#fff"}}>3D Team Capacity</h2>
@@ -520,7 +549,8 @@ export default function Dashboard() {
             <button key={key} onClick={()=>setTab(key)} style={{flex:1,fontSize:13,fontWeight:tab===key?700:400,padding:"12px 0",cursor:"pointer",background:tab===key?"#fff":"transparent",color:tab===key?"#111":"rgba(255,255,255,0.55)",border:"none",borderRadius:tab===key?"10px 10px 0 0":"0",transition:"all .2s"}}>{lbl}</button>
           ))}
         </div>
-      </div>
+        </div>{/* close zIndex wrapper */}
+      </div>{/* close header */}
 
       {/* ── CONTENT ── */}
       <div style={{background:"#fff",borderRadius:"0 0 16px 16px",padding:"20px",border:"1px solid #eee",borderTop:"none",marginBottom:16}}>
