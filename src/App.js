@@ -474,7 +474,7 @@ export default function Dashboard() {
                 <div style={{marginBottom:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                     <span style={{fontSize:11,color:"rgba(255,255,255,0.5)",display:"flex",alignItems:"center",gap:5}}><span style={{width:10,height:10,borderRadius:3,background:"#7F77DD",display:"inline-block"}}/>🎯 Pitches</span>
-                    <span style={{fontSize:11,color:"#fff",fontWeight:600}}>{ph}h <span style={{color:"rgba(255,255,255,0.4)",fontWeight:400"}}>/ {WEEKLY_CAP}h ({pPct}%)</span></span>
+                    <span style={{fontSize:11,color:"#fff",fontWeight:600}}>{ph}h <span style={{color:"rgba(255,255,255,0.4)",fontWeight:400}}>/ {WEEKLY_CAP}h ({pPct}%)</span></span>
                   </div>
                   <div style={{height:7,borderRadius:4,background:"rgba(255,255,255,0.1)",overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${pPct}%`,background:"linear-gradient(90deg,#534AB7,#7F77DD)",borderRadius:4,transition:"width .4s"}}/>
