@@ -8,7 +8,7 @@ const DB_ID       = "3ds-capacity-v1";
 const SB_HEADERS  = {"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
 
 // Background image (iridescent liquid metal)
-const BG_IMAGE = "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?w=1400&q=80";
+const BG_IMAGE = "/Streak_1.png";
 
 async function loadFromCloud() {
   try {
