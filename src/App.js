@@ -1,101 +1,108 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 
-// ── Supabase shared database (plain fetch, no SDK) ──
-const STORAGE_KEY  = "3d-team-dashboard-state";
-const SB_URL       = "https://wtlqchkpmjuftgtqrtbq.supabase.co/rest/v1/dashboard";
-const SB_KEY       = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0bHFjaGtwbWp1ZnRndHFydGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODQ5MjAsImV4cCI6MjA4OTQ2MDkyMH0.jRH0otPxIJqJrEvGqyFEb_9D70XtBT5Jis1v4lTj284";
-const DB_ID        = "3ds-dashboard-v1";
-const SB_HEADERS   = {
-  "Content-Type": "application/json",
-  "apikey": SB_KEY,
-  "Authorization": `Bearer ${SB_KEY}`
-};
+// ── Supabase shared database ──
+const STORAGE_KEY = "3d-team-dashboard-v2";
+const SB_URL      = "https://wtlqchkpmjuftgtqrtbq.supabase.co/rest/v1/dashboard";
+const SB_KEY      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0bHFjaGtwbWp1ZnRndHFydGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODQ5MjAsImV4cCI6MjA4OTQ2MDkyMH0.jRH0otPxIJqJrEvGqyFEb_9D70XtBT5Jis1v4lTj284";
+const DB_ID       = "3ds-capacity-v1";
+const SB_HEADERS  = { "Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}` };
 
 async function loadFromCloud() {
   try {
     const res = await fetch(`${SB_URL}?id=eq.${DB_ID}&select=data`, { headers: SB_HEADERS });
     if (!res.ok) return null;
     const rows = await res.json();
-    if (!rows || !rows[0]) return null;
-    const parsed = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
-    return parsed && parsed.tasks !== undefined ? parsed : null;
+    if (!rows||!rows[0]) return null;
+    const p = typeof rows[0].data==="string" ? JSON.parse(rows[0].data) : rows[0].data;
+    return p && p.tasks!==undefined ? p : null;
   } catch(e) { return null; }
 }
-
 async function saveToCloud(state) {
   try {
-    const body = JSON.stringify({ id: DB_ID, data: JSON.stringify(state) });
-    // Try UPSERT (insert or update in one call)
-    const res = await fetch(SB_URL, {
-      method: "POST",
-      headers: { ...SB_HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal" },
-      body
-    });
-    return res.ok || res.status === 201;
+    const res = await fetch(SB_URL, { method:"POST", headers:{...SB_HEADERS,"Prefer":"resolution=merge-duplicates,return=minimal"}, body:JSON.stringify({id:DB_ID,data:JSON.stringify(state)}) });
+    return res.ok||res.status===201;
   } catch(e) { return false; }
 }
 
-const TASK_TYPES = [
-  { id: "pitch",     label: "Pitch Design"    },
-  { id: "execution", label: "Execution Design" },
-  { id: "revision",  label: "Design Revisions" },
-  { id: "ocular",    label: "Venue Ocular"     },
-  { id: "ingress",   label: "Event Ingress"    },
+// ── Constants ──
+const PITCH_TYPES = [
+  { id:"pitch",    label:"Pitch Design"   },
+  { id:"revision", label:"Design Revisions"},
+  { id:"ocular",   label:"Venue Ocular"   },
 ];
-const DIFFICULTY = [
-  { id: "easy",   label: "Easy",   pts: 1, color: "#3B6D11", bg: "#EAF3DE", border: "#97C459" },
-  { id: "medium", label: "Medium", pts: 2, color: "#854F0B", bg: "#FAEEDA", border: "#EF9F27" },
-  { id: "hard",   label: "Hard",   pts: 3, color: "#A32D2D", bg: "#FCEBEB", border: "#F09595" },
+const EXEC_TYPES = [
+  { id:"execution",label:"Execution Design"},
+  { id:"ingress",  label:"Event Ingress"  },
+  { id:"revision", label:"Design Revisions"},
+  { id:"ocular",   label:"Venue Ocular"   },
 ];
-const MEMBERS  = ["Leo", "Shen", "Raha"];
-const M_COLOR  = { Leo: "#534AB7", Shen: "#0F6E56", Raha: "#993556" };
-const M_BG     = { Leo: "#EEEDFE", Shen: "#E1F5EE", Raha: "#FBEAF0" };
-const M_BG2    = { Leo: "#CECBF6", Shen: "#9FE1CB", Raha: "#F4C0D1" };
-const M_TEXT   = { Leo: "#534AB7", Shen: "#0F6E56", Raha: "#993556" };
-const M_BORDER = { Leo: "#AFA9EC", Shen: "#5DCAA5", Raha: "#ED93B1" };
-const M_ROLE   = { Leo: "3D Artist", Shen: "3D Artist", Raha: "Freelancer" };
+const EXEC_STATUSES = [
+  { id:"inprogress",  label:"In Progress",         color:"#185FA5", bg:"#E6F1FB", border:"#85B7EB" },
+  { id:"internal",    label:"Internal Review",      color:"#854F0B", bg:"#FAEEDA", border:"#EF9F27" },
+  { id:"clientfb",    label:"Client Feedback",      color:"#993556", bg:"#FBEAF0", border:"#ED93B1" },
+  { id:"approved",    label:"Approved / Done",      color:"#3B6D11", bg:"#EAF3DE", border:"#97C459" },
+  { id:"onhold",      label:"On Hold",              color:"#5F5E5A", bg:"#F1EFE8", border:"#B4B2A9" },
+];
+const HOUR_PRESETS = [2,4,8,16,24];
+const WEEKLY_CAP   = 40;
+
+const MEMBERS  = ["Leo","Shen","Raha"];
+const M_COLOR  = { Leo:"#534AB7", Shen:"#0F6E56", Raha:"#993556" };
+const M_BG     = { Leo:"#EEEDFE", Shen:"#E1F5EE", Raha:"#FBEAF0" };
+const M_TEXT   = { Leo:"#534AB7", Shen:"#0F6E56", Raha:"#993556" };
+const M_BORDER = { Leo:"#AFA9EC", Shen:"#5DCAA5", Raha:"#ED93B1" };
+const M_ROLE   = { Leo:"3D Artist", Shen:"3D Artist", Raha:"Freelancer" };
+
 const EDIT_PASSWORD = "3dteam2026";
 const DEFAULT_STATE = { tasks:{}, holidays:{}, leaves:{Leo:{},Shen:{},Raha:{}}, photos:{Leo:"",Shen:"",Raha:""} };
 
 function getPHToday() {
-  const ph = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
-  return new Date(ph.getFullYear(), ph.getMonth(), ph.getDate());
+  const ph = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Manila"}));
+  return new Date(ph.getFullYear(),ph.getMonth(),ph.getDate());
 }
-function isoDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-}
-function getMondayOf(d) {
-  const day = d.getDay(), mon = new Date(d);
-  mon.setDate(d.getDate() - (day===0?6:day-1));
-  return mon;
-}
-function buildWindow(off, today) {
-  const base = getMondayOf(today), start = new Date(base);
-  start.setDate(base.getDate() + off*14);
+function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function getMondayOf(d) { const day=d.getDay(),mon=new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1)); return mon; }
+function buildWindow(off,today) {
+  const base=getMondayOf(today),start=new Date(base);
+  start.setDate(base.getDate()+off*14);
   return Array.from({length:14},(_,i)=>{ const d=new Date(start); d.setDate(start.getDate()+i); return d; });
 }
 function fmtDate(d)  { return d.toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function dayLabel(d) { return d.toLocaleDateString("en-US",{weekday:"short"}); }
 function isWeekend(d){ return d.getDay()===0||d.getDay()===6; }
 
-function workingDaysBetween(startIso, endIso, holidays, leaveMap={}) {
-  const s=new Date(startIso+"T00:00:00"), e=new Date(endIso+"T00:00:00");
-  let count=0, cur=new Date(s);
-  while(cur<=e){ const iso=isoDate(cur); if(!isWeekend(cur)&&!holidays[iso]&&!leaveMap[iso]) count++; cur.setDate(cur.getDate()+1); }
+function workingDaysBetween(s,e,holidays,leaveMap={}) {
+  const sd=new Date(s+"T00:00:00"),ed=new Date(e+"T00:00:00");
+  let count=0,cur=new Date(sd);
+  while(cur<=ed){ const iso=isoDate(cur); if(!isWeekend(cur)&&!holidays[iso]&&!leaveMap[iso]) count++; cur.setDate(cur.getDate()+1); }
   return count;
 }
-function workingDaysFromToday(deadlineIso, todayIso, holidays, leaveMap={}) {
-  if(deadlineIso<todayIso) return 0;
-  return workingDaysBetween(todayIso, deadlineIso, holidays, leaveMap);
+function daysUntil(deadlineIso,todayIso) {
+  const d=new Date(deadlineIso+"T00:00:00"),t=new Date(todayIso+"T00:00:00");
+  return Math.round((d-t)/(1000*60*60*24));
 }
-function taskPtsInWeek(task, weekDays, holidays, leaveMap={}) {
-  if(task.done) return 0;
-  const start = task.startDate||task.deadline, end = task.deadline;
-  const totalWd = workingDaysBetween(start, end, holidays, leaveMap);
-  if(totalWd===0) return task.pts;
-  const weekWd = weekDays.reduce((s,d)=>{ const iso=isoDate(d); if(isWeekend(d)||holidays[iso]||leaveMap[iso]) return s; return iso>=start&&iso<=end?s+1:s; },0);
-  return Math.round((task.pts*weekWd/totalWd)*10)/10;
+
+// Urgency border color
+function urgencyStyle(deadlineIso,todayIso,done) {
+  if(done) return { border:"1px solid #ddd", borderLeft:"4px solid #ddd" };
+  const days=daysUntil(deadlineIso,todayIso);
+  if(days<0)  return { border:"1px solid #F09595", borderLeft:"4px solid #E24B4A" };
+  if(days===0) return { border:"2px solid #E24B4A", borderLeft:"4px solid #E24B4A" };
+  if(days===1) return { border:"1px solid #EF9F27", borderLeft:"4px solid #EF9F27" };
+  if(days<=3)  return { border:"1px solid #FAC775", borderLeft:"4px solid #FAC775" };
+  return { border:"1px solid #ddd", borderLeft:"4px solid transparent" };
 }
+
+function urgencyLabel(deadlineIso,todayIso,done) {
+  if(done) return null;
+  const days=daysUntil(deadlineIso,todayIso);
+  if(days<0)  return { label:"Overdue",  bg:"#FCEBEB", color:"#A32D2D" };
+  if(days===0) return { label:"Due Today", bg:"#FCEBEB", color:"#A32D2D" };
+  if(days===1) return { label:"Due Tomorrow", bg:"#FAEEDA", color:"#854F0B" };
+  if(days<=3)  return { label:`${days}d left`, bg:"#FDF3E0", color:"#854F0B" };
+  return null;
+}
+
 function setFavicon() {
   const c=document.createElement("canvas"); c.width=32; c.height=32;
   const ctx=c.getContext("2d");
@@ -105,92 +112,69 @@ function setFavicon() {
   l.type="image/x-icon"; l.rel="shortcut icon"; l.href=c.toDataURL(); document.head.appendChild(l);
   document.title="3D Team Dashboard";
 }
-const emptyForm=()=>({member:"Leo",type:"pitch",difficulty:"medium",project:"",startDate:"",deadline:""});
+
+const emptyForm=()=>({member:"Leo",side:"pitch",type:"pitch",hours:8,customHours:"",status:"inprogress",project:"",startDate:"",deadline:""});
 
 export default function Dashboard() {
-  const today     = useMemo(()=>getPHToday(),[]);
-  const TODAY_ISO = useMemo(()=>isoDate(today),[today]);
-  const [state, setState]             = useState(DEFAULT_STATE);
-  const [loading, setLoading]         = useState(true);
-  const [saveStatus, setSaveStatus]   = useState("saved");
-  const [isEditMode, setIsEditMode]   = useState(false);
-  const [showPwModal, setShowPwModal] = useState(false);
-  const [pwInput, setPwInput]         = useState("");
-  const [pwError, setPwError]         = useState(false);
-  const [windowOffset, setWindowOffset] = useState(0);
-  const [tab, setTab]                   = useState("calendar");
-  const [form, setForm]                 = useState(emptyForm());
-  const [leaveForm, setLeaveForm]       = useState({member:"Leo",date:""});
-  const [holForm, setHolForm]           = useState({date:"",label:""});
-  const [formTab, setFormTab]           = useState("task");
-  const [showSuggest, setShowSuggest]   = useState(false);
-  const [boardMember, setBoardMember]   = useState("Leo");
-  const [editTask, setEditTask]         = useState(null);
-  const [editForm, setEditForm]         = useState({});
-  const photoInputRefs = useRef({});
-  const saveTimer = useRef(null);
+  const today=useMemo(()=>getPHToday(),[]);
+  const TODAY_ISO=useMemo(()=>isoDate(today),[today]);
+  const [state,setState]=useState(DEFAULT_STATE);
+  const [loading,setLoading]=useState(true);
+  const [saveStatus,setSaveStatus]=useState("saved");
+  const [isEditMode,setIsEditMode]=useState(false);
+  const [showPwModal,setShowPwModal]=useState(false);
+  const [pwInput,setPwInput]=useState("");
+  const [pwError,setPwError]=useState(false);
+  const [windowOffset,setWindowOffset]=useState(0);
+  const [tab,setTab]=useState("calendar");
+  const [form,setForm]=useState(emptyForm());
+  const [leaveForm,setLeaveForm]=useState({member:"Leo",date:""});
+  const [holForm,setHolForm]=useState({date:"",label:""});
+  const [formTab,setFormTab]=useState("task");
+  const [showSuggest,setShowSuggest]=useState(false);
+  const [boardMember,setBoardMember]=useState("Leo");
+  const [editTask,setEditTask]=useState(null);
+  const [editForm,setEditForm]=useState({});
+  const photoInputRefs=useRef({});
+  const saveTimer=useRef(null);
 
   useEffect(()=>{ setFavicon(); },[]);
   useEffect(()=>{ setWindowOffset(0); },[TODAY_ISO]);
 
   useEffect(()=>{
-    const load = async () => {
-      // Try cloud first
-      const cloud = await loadFromCloud();
-      if (cloud) {
-        cloud.leaves = cloud.leaves||{}; cloud.photos = cloud.photos||{};
-        MEMBERS.forEach(m=>{ cloud.leaves[m]=cloud.leaves[m]||{}; cloud.photos[m]=cloud.photos[m]||""; });
-        setState(cloud);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloud));
-      } else {
-        // Fall back to localStorage
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved) {
-            const p = JSON.parse(saved);
-            p.leaves=p.leaves||{}; p.photos=p.photos||{};
-            MEMBERS.forEach(m=>{ p.leaves[m]=p.leaves[m]||{}; p.photos[m]=p.photos[m]||""; });
-            setState(p);
-          }
-        } catch(e) {}
-      }
+    const load=async()=>{
+      const cloud=await loadFromCloud();
+      if(cloud){ cloud.leaves=cloud.leaves||{}; cloud.photos=cloud.photos||{}; MEMBERS.forEach(m=>{cloud.leaves[m]=cloud.leaves[m]||{};cloud.photos[m]=cloud.photos[m]||"";}); setState(cloud); localStorage.setItem(STORAGE_KEY,JSON.stringify(cloud)); }
+      else { try{ const saved=localStorage.getItem(STORAGE_KEY); if(saved){ const p=JSON.parse(saved); p.leaves=p.leaves||{}; p.photos=p.photos||{}; MEMBERS.forEach(m=>{p.leaves[m]=p.leaves[m]||{};p.photos[m]=p.photos[m]||"";}); setState(p); } }catch(e){} }
       setLoading(false);
     };
     load();
   },[]);
 
-  // Poll cloud every 10 seconds for changes from other users
   useEffect(()=>{
-    const poll = async () => {
-      const cloud = await loadFromCloud();
-      if (cloud) {
-        cloud.leaves=cloud.leaves||{}; cloud.photos=cloud.photos||{};
-        MEMBERS.forEach(m=>{ cloud.leaves[m]=cloud.leaves[m]||{}; cloud.photos[m]=cloud.photos[m]||""; });
-        setState(prev => JSON.stringify(prev)!==JSON.stringify(cloud) ? cloud : prev);
-      }
+    const poll=async()=>{
+      const cloud=await loadFromCloud();
+      if(cloud){ cloud.leaves=cloud.leaves||{}; cloud.photos=cloud.photos||{}; MEMBERS.forEach(m=>{cloud.leaves[m]=cloud.leaves[m]||{};cloud.photos[m]=cloud.photos[m]||"";}); setState(prev=>JSON.stringify(prev)!==JSON.stringify(cloud)?cloud:prev); }
     };
-    const interval = setInterval(poll, 10000);
-    return () => clearInterval(interval);
+    const iv=setInterval(poll,10000); return()=>clearInterval(iv);
   },[]);
 
   useEffect(()=>{
-    if(loading) return;
-    if(saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(()=>{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      saveToCloud(state);
-      setSaveStatus("saved");
-    }, 800);
-  },[state, loading]);
+    if(loading)return;
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{ localStorage.setItem(STORAGE_KEY,JSON.stringify(state)); setSaveStatus("saved"); },800);
+  },[state,loading]);
 
-  const updateState=ns=>{ setState(ns); };
+  const updateState=ns=>setState(ns);
   const handleUnlock=()=>{ if(pwInput===EDIT_PASSWORD){setIsEditMode(true);setShowPwModal(false);setPwInput("");setPwError(false);}else{setPwError(true);setPwInput("");} };
   const handlePhotoUpload=(member,file)=>{ if(!file)return; const r=new FileReader(); r.onload=e=>updateState({...state,photos:{...state.photos,[member]:e.target.result}}); r.readAsDataURL(file); };
   const removePhoto=m=>updateState({...state,photos:{...state.photos,[m]:""}});
 
-  const days  = useMemo(()=>buildWindow(windowOffset,today),[windowOffset,today]);
-  const week1 = days.slice(0,7), week2=days.slice(7,14);
-  const getDay= iso=>(state.tasks||{})[iso]||{Leo:[],Shen:[],Raha:[]};
+  const days=useMemo(()=>buildWindow(windowOffset,today),[windowOffset,today]);
+  const week1=days.slice(0,7),week2=days.slice(7,14);
+  const currentWeek=useMemo(()=>{ const mon=getMondayOf(today); return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; }); },[today]);
+
+  const getDay=iso=>(state.tasks||{})[iso]||{Leo:[],Shen:[],Raha:[]};
 
   const allTasks=useMemo(()=>{
     const out=[];
@@ -200,36 +184,40 @@ export default function Dashboard() {
     return out;
   },[state]);
 
-  const weekLoad=(member,daysArr)=>{
-    const mt=allTasks.filter(t=>t.member===member&&!t.done);
-    return Math.round(mt.reduce((s,t)=>s+taskPtsInWeek(t,daysArr,state.holidays||{},(state.leaves||{})[member]||{}),0)*10)/10;
+  // Hours in current week per member per side
+  const weekHours=(member,side)=>{
+    return allTasks.filter(t=>t.member===member&&!t.done&&t.side===side).reduce((s,t)=>{
+      const start=t.startDate||t.deadline,end=t.deadline;
+      const totalWd=workingDaysBetween(start,end,state.holidays||{},(state.leaves||{})[member]||{});
+      if(totalWd===0) return s+Number(t.hours||0);
+      const weekWd=currentWeek.reduce((ws,d)=>{ if(isWeekend(d)) return ws; const iso=isoDate(d); if((state.holidays||{})[iso]||((state.leaves||{})[member]||{})[iso]) return ws; return iso>=start&&iso<=end?ws+1:ws; },0);
+      return s+Math.round((Number(t.hours||0)*weekWd/totalWd)*10)/10;
+    },0);
   };
 
-  const deadlineMap={};
-  allTasks.filter(t=>t.deadline&&!t.done).forEach(t=>{ (deadlineMap[t.deadline]=deadlineMap[t.deadline]||[]).push(t); });
-  const overlaps=Object.entries(deadlineMap).filter(([,a])=>a.length>1);
-  const w1Loads=MEMBERS.map(m=>weekLoad(m,week1)), w2Loads=MEMBERS.map(m=>weekLoad(m,week2));
-  const bothHeavy=(w1Loads[0]>=10&&w1Loads[1]>=10)||(w2Loads[0]>=10&&w2Loads[1]>=10);
+  const totalWeekHours=member=>Math.round((weekHours(member,"pitch")+weekHours(member,"execution"))*10)/10;
+  const capacityPct=(member,side)=>Math.min(100,Math.round((weekHours(member,side)/WEEKLY_CAP)*100));
 
   const mutateMember=(iso,member,fn)=>{ const ns={...state,tasks:{...state.tasks,[iso]:{...(state.tasks||{})[iso],[member]:fn(((state.tasks||{})[iso]||{})[member]||[])}}}; updateState(ns); };
-  const toggleDone =(iso,member,id)=>mutateMember(iso,member,list=>list.map(t=>t.id===id?{...t,done:!t.done}:t));
-  const removeTask =(iso,member,id)=>mutateMember(iso,member,list=>list.filter(t=>t.id!==id));
+  const toggleDone=(iso,member,id)=>mutateMember(iso,member,list=>list.map(t=>t.id===id?{...t,done:!t.done}:t));
+  const removeTask=(iso,member,id)=>mutateMember(iso,member,list=>list.filter(t=>t.id!==id));
+  const updateStatus=(iso,member,id,status)=>mutateMember(iso,member,list=>list.map(t=>t.id===id?{...t,status}:t));
 
   const addTask=()=>{
     if(!isEditMode||!form.project.trim()||!form.deadline)return;
-    const diff=DIFFICULTY.find(d=>d.id===form.difficulty);
-    const task={id:Date.now(),type:form.type,difficulty:form.difficulty,project:form.project.trim(),startDate:form.startDate,deadline:form.deadline,pts:diff.pts,done:false};
+    const hrs=form.customHours?Number(form.customHours):form.hours;
+    const task={id:Date.now(),side:form.side,type:form.type,hours:hrs,status:form.side==="execution"?form.status:"",project:form.project.trim(),startDate:form.startDate,deadline:form.deadline,done:false};
     const iso=form.deadline;
     const ns={...state,tasks:{...state.tasks,[iso]:{...(state.tasks||{})[iso],[form.member]:[...((state.tasks||{})[iso]?.[form.member]||[]),task]}}};
     updateState(ns); setForm(emptyForm());
   };
 
-  const openEdit=(iso,member,task)=>{ if(!isEditMode)return; setEditTask({iso,member,task}); setEditForm({type:task.type,difficulty:task.difficulty,project:task.project,startDate:task.startDate||"",deadline:task.deadline}); };
+  const openEdit=(iso,member,task)=>{ if(!isEditMode)return; setEditTask({iso,member,task}); setEditForm({side:task.side||"pitch",type:task.type,hours:task.hours||8,customHours:"",status:task.status||"inprogress",project:task.project,startDate:task.startDate||"",deadline:task.deadline}); };
   const saveEdit=()=>{
     if(!editTask||!editForm.project.trim()||!editForm.deadline)return;
     const {iso,member,task}=editTask;
-    const diff=DIFFICULTY.find(d=>d.id===editForm.difficulty);
-    const updated={...task,type:editForm.type,difficulty:editForm.difficulty,project:editForm.project.trim(),startDate:editForm.startDate,deadline:editForm.deadline,pts:diff.pts};
+    const hrs=editForm.customHours?Number(editForm.customHours):editForm.hours;
+    const updated={...task,side:editForm.side,type:editForm.type,hours:hrs,status:editForm.status,project:editForm.project.trim(),startDate:editForm.startDate,deadline:editForm.deadline};
     const oldList=((state.tasks[iso]||{})[member]||[]).filter(t=>t.id!==task.id);
     const nd=editForm.deadline;
     const newList=[...((state.tasks[nd]||{})[member]||[]),updated];
@@ -255,61 +243,76 @@ export default function Dashboard() {
     );
   };
 
-  const DoneBtn=({done,onClick,size=22})=>(
-    <button onClick={isEditMode?onClick:undefined} style={{flexShrink:0,width:size,height:size,borderRadius:"50%",border:`2px solid ${done?"#3B6D11":isEditMode?"#888780":"#ddd"}`,background:done?"#3B6D11":isEditMode?"#fff":"#f5f5f5",cursor:isEditMode?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .15s",boxShadow:done?"0 0 0 3px #C0DD97":"0 0 0 1px #D3D1C7"}}>
+  const DoneBtn=({done,onClick,size=20})=>(
+    <button onClick={isEditMode?onClick:undefined} style={{flexShrink:0,width:size,height:size,borderRadius:"50%",border:`2px solid ${done?"#3B6D11":isEditMode?"#888780":"#ddd"}`,background:done?"#3B6D11":isEditMode?"#fff":"#f5f5f5",cursor:isEditMode?"pointer":"default",display:"flex",alignItems:"center",justifyContent:"center",padding:0,boxShadow:done?"0 0 0 3px #C0DD97":"0 0 0 1px #D3D1C7"}}>
       {done?<span style={{color:"#fff",fontSize:size*0.55,lineHeight:1,fontWeight:700}}>✓</span>:<span style={{color:"#B4B2A9",fontSize:size*0.45,lineHeight:1}}>○</span>}
     </button>
   );
-  const EditBtn=({onClick})=>{ if(!isEditMode)return null; return <button onClick={onClick} style={{flexShrink:0,width:20,height:20,borderRadius:4,border:"0.5px solid #ccc",background:"#f5f5f5",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:11,color:"#666"}}>✏</button>; };
 
-  const CompactCard=({t,iso,member})=>{
-    const tt=TASK_TYPES.find(x=>x.id===t.type),df=DIFFICULTY.find(x=>x.id===t.difficulty);
-    const wdT=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays||{},(state.leaves||{})[member]||{}):null;
-    const wdR=!t.done?workingDaysFromToday(t.deadline,TODAY_ISO,state.holidays||{},(state.leaves||{})[member]||{}):null;
+  // ── Task Card (Board) ──
+  const BoardCard=({t,iso,member})=>{
+    const typeList=t.side==="execution"?EXEC_TYPES:PITCH_TYPES;
+    const tt=typeList.find(x=>x.id===t.type)||typeList[0];
+    const st=EXEC_STATUSES.find(x=>x.id===t.status);
+    const urg=urgencyLabel(t.deadline,TODAY_ISO,t.done);
+    const urgS=urgencyStyle(t.deadline,TODAY_ISO,t.done);
+    const wdTotal=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays||{},(state.leaves||{})[member]||{}):null;
+    const dLeft=!t.done?daysUntil(t.deadline,TODAY_ISO):null;
     return(
-      <div style={{borderRadius:6,padding:"4px 6px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":M_BORDER[member]}`,opacity:t.done?0.55:1,marginBottom:2}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}>
-          <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={16}/>
+      <div style={{borderRadius:10,padding:"10px 12px",background:t.done?"#f9f9f9":M_BG[member],opacity:t.done?0.6:1,marginBottom:8,...urgS}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+          <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={20}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:9,fontWeight:700,color:M_TEXT[member],textTransform:"uppercase",letterSpacing:"0.3px"}}>{member}</div>
-            <div style={{fontSize:10,color:t.done?"#888":M_TEXT[member],fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:t.done?"line-through":"none"}}>{t.project}</div>
-            <div style={{display:"flex",gap:3,marginTop:2,flexWrap:"wrap",alignItems:"center"}}>
-              <span style={{fontSize:8,color:M_TEXT[member],opacity:0.75}}>{tt?.label}</span>
-              <span style={{fontSize:8,background:df?.bg,color:df?.color,border:`0.5px solid ${df?.border}`,borderRadius:3,padding:"0 4px"}}>{df?.label}·{t.pts}pt</span>
-              {wdT!==null&&<span style={{fontSize:8,color:"#888"}}>{wdT}wd</span>}
-              {wdR!==null&&<span style={{fontSize:8,color:wdR<=2?"#A32D2D":"#888",fontWeight:wdR<=2?600:400}}>{wdR}d left</span>}
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,fontWeight:500,background:"rgba(0,0,0,0.06)",color:M_TEXT[member],borderRadius:4,padding:"1px 7px"}}>{tt.label}</span>
+              <span style={{fontSize:13,fontWeight:600,flex:1,textDecoration:t.done?"line-through":"none",color:t.done?"#888":"#111"}}>{t.project}</span>
+              {urg&&<span style={{fontSize:10,fontWeight:600,background:urg.bg,color:urg.color,borderRadius:4,padding:"1px 7px"}}>{urg.label}</span>}
+              {isEditMode&&<><button onClick={()=>{ const el=document.getElementById(`edit-${t.id}`); if(el)el.click(); openEdit(iso,member,t); }} style={{fontSize:11,background:"none",border:"0.5px solid #ccc",borderRadius:4,cursor:"pointer",color:"#888",padding:"1px 5px"}}>✏</button><button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:12,background:"none",border:"none",color:"#bbb",cursor:"pointer",padding:"0 2px"}}>✕</button></>}
             </div>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:11,color:"#888"}}>⏱ <b style={{color:"#111"}}>{t.hours}h</b></span>
+              {t.startDate&&<span style={{fontSize:11,color:"#888"}}>▶ <b style={{color:"#111"}}>{t.startDate}</b></span>}
+              <span style={{fontSize:11,color:"#888"}}>🏁 <b style={{color:"#111"}}>{t.deadline}</b></span>
+              {wdTotal!==null&&<span style={{fontSize:11,color:"#888"}}>📆 <b style={{color:"#111"}}>{wdTotal}</b>wd</span>}
+              {dLeft!==null&&dLeft>3&&<span style={{fontSize:11,color:"#888"}}><b style={{color:"#111"}}>{dLeft}</b>d left</span>}
+              {t.done&&<span style={{fontSize:11,background:"#EAF3DE",color:"#3B6D11",borderRadius:6,padding:"1px 7px"}}>✓ Done</span>}
+            </div>
+            {/* Execution status selector */}
+            {t.side==="execution"&&!t.done&&(
+              <div style={{marginTop:6,display:"flex",gap:4,flexWrap:"wrap"}}>
+                {EXEC_STATUSES.map(s=>(
+                  <button key={s.id} onClick={()=>isEditMode&&updateStatus(iso,member,t.id,s.id)} style={{fontSize:10,fontWeight:s.id===t.status?600:400,padding:"2px 8px",borderRadius:20,border:`1px solid ${s.id===t.status?s.border:"#ddd"}`,background:s.id===t.status?s.bg:"transparent",color:s.id===t.status?s.color:"#aaa",cursor:isEditMode?"pointer":"default",transition:"all .15s"}}>{s.label}</button>
+                ))}
+              </div>
+            )}
           </div>
-          {isEditMode&&<div style={{display:"flex",flexDirection:"column",gap:3}}><EditBtn onClick={()=>openEdit(iso,member,t)}/><button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:10,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:0,lineHeight:1}}>✕</button></div>}
         </div>
       </div>
     );
   };
 
-  const BoardCard=({t,iso,member})=>{
-    const tt=TASK_TYPES.find(x=>x.id===t.type),df=DIFFICULTY.find(x=>x.id===t.difficulty);
-    const wdT=t.startDate?workingDaysBetween(t.startDate,t.deadline,state.holidays||{},(state.leaves||{})[member]||{}):null;
-    const wdR=!t.done?workingDaysFromToday(t.deadline,TODAY_ISO,state.holidays||{},(state.leaves||{})[member]||{}):null;
-    const isPast=!t.done&&t.deadline<TODAY_ISO;
+  // ── Compact calendar card ──
+  const CompactCard=({t,iso,member})=>{
+    const typeList=t.side==="execution"?EXEC_TYPES:PITCH_TYPES;
+    const tt=typeList.find(x=>x.id===t.type)||typeList[0];
+    const urg=urgencyLabel(t.deadline,TODAY_ISO,t.done);
+    const urgS=urgencyStyle(t.deadline,TODAY_ISO,t.done);
+    const st=t.side==="execution"?EXEC_STATUSES.find(x=>x.id===t.status):null;
     return(
-      <div style={{borderRadius:10,padding:"12px 14px",background:t.done?"#f5f5f5":M_BG[member],border:`1px solid ${t.done?"#ddd":isPast?"#F09595":M_BORDER[member]}`,borderLeft:`4px solid ${t.done?"#ddd":M_COLOR[member]}`,opacity:t.done?0.6:1,marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-          <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={24}/>
+      <div style={{borderRadius:6,padding:"3px 6px",background:t.done?"#f5f5f5":M_BG[member],opacity:t.done?0.55:1,marginBottom:2,...urgS,borderRadius:5}}>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <DoneBtn done={t.done} onClick={()=>toggleDone(iso,member,t.id)} size={14}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,fontWeight:500,background:M_BG2[member],color:M_TEXT[member],border:`0.5px solid ${M_BORDER[member]}`,borderRadius:4,padding:"2px 8px"}}>{tt?.label}</span>
-              <span style={{fontSize:13,fontWeight:500,flex:1,textDecoration:t.done?"line-through":"none",color:t.done?"#888":"#111"}}>{t.project}</span>
-              <span style={{fontSize:11,background:df?.bg,color:df?.color,border:`0.5px solid ${df?.border}`,borderRadius:4,padding:"2px 8px"}}>{df?.label}·{t.pts}pt</span>
-              {isEditMode&&<><EditBtn onClick={()=>openEdit(iso,member,t)}/><button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:12,background:"none",border:"none",color:"#aaa",cursor:"pointer",padding:"0 2px"}}>✕</button></>}
-            </div>
-            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-              {t.startDate&&<span style={{fontSize:11,color:"#888"}}>▶ <b style={{color:"#111"}}>{t.startDate}</b></span>}
-              <span style={{fontSize:11,color:isPast?"#A32D2D":"#888",display:"flex",gap:4,alignItems:"center"}}>🏁 <b style={{color:isPast?"#A32D2D":"#111"}}>{t.deadline}</b>{isPast&&!t.done&&<span style={{fontSize:10,background:"#FCEBEB",color:"#A32D2D",borderRadius:4,padding:"1px 5px"}}>Past</span>}</span>
-              {wdT!==null&&<span style={{fontSize:11,color:"#888"}}>📆 <b style={{color:"#111"}}>{wdT}</b> working days</span>}
-              {wdR!==null&&<span style={{fontSize:11,color:wdR<=2?"#A32D2D":"#888"}}>⏳ <b style={{color:wdR<=2?"#A32D2D":"#111"}}>{wdR}</b> days left</span>}
-              {t.done&&<span style={{fontSize:11,background:"#EAF3DE",color:"#3B6D11",borderRadius:6,padding:"2px 8px"}}>✓ Completed</span>}
+            <div style={{fontSize:9,fontWeight:700,color:M_TEXT[member],textTransform:"uppercase",letterSpacing:"0.3px"}}>{member} · {t.side==="pitch"?"P":"E"}</div>
+            <div style={{fontSize:10,color:t.done?"#888":M_TEXT[member],fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:t.done?"line-through":"none"}}>{t.project}</div>
+            <div style={{display:"flex",gap:3,marginTop:1,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:8,color:M_TEXT[member],opacity:0.75}}>{tt.label}</span>
+              <span style={{fontSize:8,color:"#888"}}>⏱{t.hours}h</span>
+              {st&&<span style={{fontSize:8,background:st.bg,color:st.color,borderRadius:3,padding:"0 4px"}}>{st.label}</span>}
+              {urg&&<span style={{fontSize:8,fontWeight:600,color:urg.color}}>{urg.label}</span>}
             </div>
           </div>
+          {isEditMode&&<button onClick={()=>removeTask(iso,member,t.id)} style={{fontSize:9,background:"none",border:"none",color:"#bbb",cursor:"pointer",padding:0}}>✕</button>}
         </div>
       </div>
     );
@@ -320,11 +323,11 @@ export default function Dashboard() {
     const dayTasks=getDay(iso),activeDots=MEMBERS.filter(m=>isActiveTaskDay(iso,m));
     const lL=(state.leaves||{}).Leo?.[iso],sL=(state.leaves||{}).Shen?.[iso],rL=(state.leaves||{}).Raha?.[iso];
     return(
-      <div style={{minHeight:110,borderRadius:8,border:isToday?"2px solid #534AB7":"0.5px solid #ddd",background:weekend?"#ECEAE4":holiday?"#FDF3E0":"#fff",padding:"6px 7px",display:"flex",flexDirection:"column",gap:2}}>
+      <div style={{minHeight:110,borderRadius:8,border:isToday?"2px solid #534AB7":"0.5px solid #ddd",background:weekend?"#ECEAE4":holiday?"#FDF3E0":"#fff",padding:"5px 6px",display:"flex",flexDirection:"column",gap:2}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:1}}>
           <span style={{fontSize:11,fontWeight:isToday?700:500,color:weekend?"#888780":isToday?"#534AB7":"#111"}}>{dayLabel(day)} {day.getDate()}</span>
           {isToday&&<span style={{fontSize:9,background:"#EEEDFE",color:"#534AB7",borderRadius:4,padding:"1px 5px",fontWeight:600}}>Today</span>}
-          {holiday&&!isToday&&<span style={{fontSize:9,background:"#FAEEDA",color:"#854F0B",borderRadius:4,padding:"1px 5px",maxWidth:58,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{holiday}</span>}
+          {holiday&&!isToday&&<span style={{fontSize:9,background:"#FAEEDA",color:"#854F0B",borderRadius:4,padding:"1px 5px",maxWidth:56,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{holiday}</span>}
         </div>
         {weekend?<span style={{fontSize:10,color:"#888780",fontStyle:"italic"}}>No work</span>
           :<>
@@ -342,14 +345,12 @@ export default function Dashboard() {
   };
 
   const WeekStrip=({wDays,label})=>{
-    const loads=MEMBERS.map(m=>({m,load:weekLoad(m,wDays)}));
     const workdays=wDays.filter(d=>!isWeekend(d)&&!(state.holidays||{})[isoDate(d)]).length;
     return(
       <div style={{marginBottom:18}}>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,flexWrap:"wrap"}}>
           <span style={{fontSize:12,fontWeight:500}}>{label} · {fmtDate(wDays[0])} – {fmtDate(wDays[6])}</span>
           <span style={{fontSize:11,color:"#888"}}>{workdays} working days</span>
-          {loads.map(({m,load})=>{ const over=load>=10,mod=load>=6; return <span key={m} style={{fontSize:11,borderRadius:20,padding:"2px 9px",background:over?"#FCEBEB":mod?"#FAEEDA":M_BG[m],color:over?"#A32D2D":mod?"#854F0B":M_TEXT[m]}}>{m}: {load}pt{over?" ⚠":""}</span>; })}
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)",gap:5}}>
           {wDays.map(d=><DayCell key={isoDate(d)} day={d}/>)}
@@ -361,22 +362,29 @@ export default function Dashboard() {
   const EditModal=()=>{
     if(!editTask)return null;
     const {member}=editTask;
+    const typeList=editForm.side==="execution"?EXEC_TYPES:PITCH_TYPES;
     return(
-      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setEditTask(null)}>
-        <div style={{background:"rgba(255,255,255,0.97)",borderRadius:14,padding:"20px 22px",width:340,boxSizing:"border-box",border:`2px solid ${M_BORDER[member]}`,backdropFilter:"blur(8px)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>setEditTask(null)}>
+        <div style={{background:"rgba(255,255,255,0.98)",borderRadius:14,padding:"20px 22px",width:360,maxHeight:"90vh",overflowY:"auto",boxSizing:"border-box",border:`2px solid ${M_BORDER[member]}`}} onClick={e=>e.stopPropagation()}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}><Avatar member={member} size={26}/><span style={{fontWeight:500,fontSize:14,color:"#111"}}>Edit task — {member}</span></div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}><Avatar member={member} size={26}/><span style={{fontWeight:600,fontSize:14,color:"#111"}}>Edit — {member}</span></div>
             <button onClick={()=>setEditTask(null)} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",color:"#888"}}>✕</button>
           </div>
+          <div style={{display:"flex",gap:6,marginBottom:12}}>
+            {["pitch","execution"].map(s=><button key={s} onClick={()=>setEditForm(f=>({...f,side:s,type:s==="pitch"?"pitch":"execution"}))} style={{flex:1,padding:"7px 0",fontSize:12,fontWeight:500,borderRadius:8,cursor:"pointer",background:editForm.side===s?(s==="pitch"?"#EEEDFE":"#E1F5EE"):"#f5f5f5",color:editForm.side===s?(s==="pitch"?"#534AB7":"#0F6E56"):"#888",border:`1.5px solid ${editForm.side===s?(s==="pitch"?"#AFA9EC":"#5DCAA5"):"#ddd"}`}}>{s==="pitch"?"🎯 Pitch":"⚙ Execution"}</button>)}
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:4}}>Task type</label><select value={editForm.type} onChange={e=>setEditForm(f=>({...f,type:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{TASK_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
-            <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:4}}>Project / event name</label><input value={editForm.project} onChange={e=>setEditForm(f=>({...f,project:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+            <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:4}}>Task type</label><select value={editForm.type} onChange={e=>setEditForm(f=>({...f,type:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{typeList.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
+            <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:4}}>Project name</label><input value={editForm.project} onChange={e=>setEditForm(f=>({...f,project:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+            <div>
+              <label style={{fontSize:11,color:"#555",display:"block",marginBottom:6}}>Estimated hours</label>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>{HOUR_PRESETS.map(h=><button key={h} onClick={()=>setEditForm(f=>({...f,hours:h,customHours:""}))} style={{padding:"5px 10px",fontSize:12,borderRadius:6,cursor:"pointer",background:editForm.hours===h&&!editForm.customHours?"#534AB7":"#f5f5f5",color:editForm.hours===h&&!editForm.customHours?"#fff":"#555",border:`0.5px solid ${editForm.hours===h&&!editForm.customHours?"#534AB7":"#ddd"}`}}>{h}h</button>)}</div>
+              <input type="number" placeholder="Custom hours" value={editForm.customHours} onChange={e=>setEditForm(f=>({...f,customHours:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/>
+            </div>
+            {editForm.side==="execution"&&<div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:6}}>Status</label><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{EXEC_STATUSES.map(s=><button key={s.id} onClick={()=>setEditForm(f=>({...f,status:s.id}))} style={{fontSize:11,padding:"4px 10px",borderRadius:20,cursor:"pointer",background:editForm.status===s.id?s.bg:"transparent",color:editForm.status===s.id?s.color:"#aaa",border:`1px solid ${editForm.status===s.id?s.border:"#ddd"}`}}>{s.label}</button>)}</div></div>}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:4}}>Start date</label><input type="date" value={editForm.startDate} onChange={e=>setEditForm(f=>({...f,startDate:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
               <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:4}}>Deadline</label><input type="date" value={editForm.deadline} onChange={e=>setEditForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-            </div>
-            <div><label style={{fontSize:11,color:"#555",display:"block",marginBottom:6}}>Difficulty</label>
-              <div style={{display:"flex",gap:6}}>{DIFFICULTY.map(d=><button key={d.id} onClick={()=>setEditForm(f=>({...f,difficulty:d.id}))} style={{flex:1,fontSize:12,fontWeight:500,padding:"6px 0",borderRadius:8,cursor:"pointer",background:editForm.difficulty===d.id?d.bg:"#f5f5f5",color:editForm.difficulty===d.id?d.color:"#666",border:`0.5px solid ${editForm.difficulty===d.id?d.border:"#ddd"}`}}>{d.label}<br/><span style={{fontSize:10,fontWeight:400}}>{d.pts}pt</span></button>)}</div>
             </div>
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <button onClick={()=>setEditTask(null)} style={{flex:1,padding:"9px",fontSize:13,borderRadius:8,border:"0.5px solid #ccc",background:"#f5f5f5",color:"#555",cursor:"pointer"}}>Cancel</button>
@@ -390,11 +398,8 @@ export default function Dashboard() {
 
   const PasswordModal=()=>(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}} onClick={()=>{setShowPwModal(false);setPwInput("");setPwError(false);}}>
-      <div style={{background:"rgba(255,255,255,0.97)",borderRadius:14,padding:"24px",width:300,boxSizing:"border-box",border:"2px solid #AFA9EC",backdropFilter:"blur(8px)"}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <span style={{fontWeight:500,fontSize:15,color:"#111"}}>🔒 Editor access</span>
-          <button onClick={()=>{setShowPwModal(false);setPwInput("");setPwError(false);}} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",color:"#888"}}>✕</button>
-        </div>
+      <div style={{background:"rgba(255,255,255,0.97)",borderRadius:14,padding:"24px",width:300,boxSizing:"border-box",border:"2px solid #AFA9EC"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><span style={{fontWeight:600,fontSize:15,color:"#111"}}>🔒 Editor access</span><button onClick={()=>{setShowPwModal(false);setPwInput("");setPwError(false);}} style={{background:"none",border:"none",fontSize:16,cursor:"pointer",color:"#888"}}>✕</button></div>
         <p style={{fontSize:12,color:"#888",margin:"0 0 14px"}}>Enter the password to enable editing.</p>
         <input type="password" value={pwInput} onChange={e=>{setPwInput(e.target.value);setPwError(false);}} onKeyDown={e=>e.key==="Enter"&&handleUnlock()} placeholder="Enter password" autoFocus style={{width:"100%",fontSize:14,padding:"8px 12px",borderRadius:8,border:`1.5px solid ${pwError?"#F09595":"#ccc"}`,boxSizing:"border-box",marginBottom:6,outline:"none"}}/>
         {pwError&&<p style={{fontSize:11,color:"#A32D2D",margin:"0 0 10px"}}>Incorrect password. Try again.</p>}
@@ -411,79 +416,103 @@ export default function Dashboard() {
     </div>
   );
 
+  const currentTypeList=form.side==="execution"?EXEC_TYPES:PITCH_TYPES;
+
   return(
-    <div style={{fontFamily:"system-ui,sans-serif",color:"#111",maxWidth:960,margin:"0 auto"}}>
+    <div style={{fontFamily:"system-ui,sans-serif",color:"#111",maxWidth:1100,margin:"0 auto"}}>
       {showPwModal&&<PasswordModal/>}
       <EditModal/>
 
+      {/* ── HEADER ── */}
       <div style={{background:"linear-gradient(135deg,#1a1040 0%,#2d1b69 50%,#1a3a2a 100%)",borderRadius:"0 0 20px 20px",padding:"24px 24px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:12}}>
           <div>
-            <h2 style={{margin:0,fontSize:22,fontWeight:600,color:"#fff"}}>3D Team Dashboard</h2>
-            <p style={{margin:"4px 0 0",fontSize:12,color:"rgba(255,255,255,0.55)"}}>Workload and Calendar Tracker · Philippines Time</p>
+            <h2 style={{margin:0,fontSize:22,fontWeight:700,color:"#fff"}}>3D Team Capacity</h2>
+            <p style={{margin:"4px 0 0",fontSize:12,color:"rgba(255,255,255,0.5)"}}>Workload and Calendar Tracker · Philippines Time · Week of {fmtDate(currentWeek[0])}</p>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:11,color:saveStatus==="error"?"#F09595":saveStatus==="saving"?"#FAC775":"rgba(255,255,255,0.4)",display:"flex",alignItems:"center",gap:4}}>
+            <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",display:"flex",alignItems:"center",gap:4}}>
               <span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:saveStatus==="error"?"#E24B4A":saveStatus==="saving"?"#EF9F27":"#639922"}}/>
-              {saveStatus==="saving"?"Saving…":saveStatus==="error"?"Save failed":"Saved"}
+              {saveStatus==="saving"?"Syncing…":saveStatus==="error"?"Sync failed":"Synced"}
             </span>
-            {isEditMode && (
-              <button onClick={async()=>{
-                setSaveStatus("saving");
-                const ok = await saveToCloud(state);
-                setSaveStatus("saved");
-                alert(ok ? "✅ Synced to cloud! Team can refresh to see updates." : "❌ Sync failed — check internet connection.");
-              }} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(99,153,34,0.3)",color:"#9FE1CB",border:"1px solid rgba(99,153,34,0.5)"}}>☁ Sync to cloud</button>
-            )}
-            {isEditMode
-              ?<button onClick={()=>setIsEditMode(false)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(159,225,203,0.2)",color:"#9FE1CB",border:"1px solid rgba(159,225,203,0.4)"}}>✓ Editing — Lock</button>
-              :<button onClick={()=>setShowPwModal(true)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.2)"}}>🔒 View only</button>
-            }
+            {isEditMode&&<button onClick={async()=>{ setSaveStatus("saving"); const ok=await saveToCloud(state); setSaveStatus("saved"); alert(ok?"✅ Synced! Team can refresh.":"❌ Sync failed."); }} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(99,153,34,0.3)",color:"#9FE1CB",border:"1px solid rgba(99,153,34,0.5)"}}>☁ Sync to cloud</button>}
+            {isEditMode?<button onClick={()=>setIsEditMode(false)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(159,225,203,0.2)",color:"#9FE1CB",border:"1px solid rgba(159,225,203,0.4)"}}>✓ Editing — Lock</button>:<button onClick={()=>setShowPwModal(true)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:"rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",border:"1px solid rgba(255,255,255,0.2)"}}>🔒 View only</button>}
           </div>
         </div>
+
+        {/* Capacity cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
           {MEMBERS.map(m=>{
-            const w1l=weekLoad(m,week1),w2l=weekLoad(m,week2);
-            const over=w1l>=10||w2l>=10,mod=w1l>=6||w2l>=6;
-            const badge=over?{bg:"rgba(242,74,74,0.2)",text:"#F09595",label:"Heavy"}:mod?{bg:"rgba(239,159,39,0.2)",text:"#FAC775",label:"Moderate"}:{bg:"rgba(99,153,34,0.2)",text:"#9FE1CB",label:"Light"};
+            const ph=Math.round(weekHours(m,"pitch")*10)/10;
+            const eh=Math.round(weekHours(m,"execution")*10)/10;
+            const total=Math.round((ph+eh)*10)/10;
+            const free=Math.max(0,WEEKLY_CAP-total);
+            const pPct=capacityPct(m,"pitch");
+            const ePct=capacityPct(m,"execution");
+            const totalPct=Math.min(100,Math.round((total/WEEKLY_CAP)*100));
+            const over=totalPct>=90,mod=totalPct>=60;
+            const badge=over?{bg:"rgba(242,74,74,0.2)",text:"#F09595",label:"Near Full"}:mod?{bg:"rgba(239,159,39,0.2)",text:"#FAC775",label:"Moderate"}:{bg:"rgba(99,153,34,0.2)",text:"#9FE1CB",label:"Available"};
             const leaveDays=Object.keys((state.leaves||{})[m]||{}).filter(d=>{ const dd=new Date(d+"T00:00:00"); return dd>=days[0]&&dd<=days[13]; });
             return(
               <div key={m} style={{background:"rgba(255,255,255,0.08)",borderRadius:"14px 14px 0 0",padding:"16px",border:"1px solid rgba(255,255,255,0.12)",borderBottom:"none"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                  <Avatar member={m} size={42} showUpload={true}/>
+                  <Avatar member={m} size={40} showUpload={true}/>
                   <div style={{flex:1}}>
-                    <div style={{fontWeight:600,fontSize:15,color:"#fff"}}>{m}</div>
+                    <div style={{fontWeight:700,fontSize:15,color:"#fff"}}>{m}</div>
                     <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>{M_ROLE[m]}</div>
                   </div>
-                  <span style={{fontSize:10,fontWeight:500,background:badge.bg,color:badge.text,borderRadius:20,padding:"3px 9px",border:`1px solid ${badge.text}33`}}>{badge.label}</span>
+                  <span style={{fontSize:10,fontWeight:600,background:badge.bg,color:badge.text,borderRadius:20,padding:"3px 9px",border:`1px solid ${badge.text}33`}}>{badge.label}</span>
                 </div>
-                <div style={{display:"flex",gap:16,marginBottom:8}}>
-                  {[["Wk1",w1l],["Wk2",w2l]].map(([lbl,val])=>(
-                    <div key={lbl}><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>{lbl}</div>
-                    <div style={{fontSize:22,fontWeight:600,color:val>=10?"#F09595":"#fff",lineHeight:1}}>{val}<span style={{fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:400}}> pt</span></div></div>
-                  ))}
+
+                {/* Combined capacity bar */}
+                <div style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>Weekly capacity</span>
+                    <span style={{fontSize:11,color:over?"#F09595":"rgba(255,255,255,0.8)",fontWeight:600}}>{total}h / {WEEKLY_CAP}h</span>
+                  </div>
+                  <div style={{height:8,borderRadius:4,background:"rgba(255,255,255,0.1)",overflow:"hidden",display:"flex"}}>
+                    <div style={{height:"100%",width:`${pPct}%`,background:"#534AB7",borderRadius:"4px 0 0 4px",transition:"width .4s"}}/>
+                    <div style={{height:"100%",width:`${ePct}%`,background:"#0F6E56",transition:"width .4s"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:12,marginTop:5}}>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:2,background:"#534AB7",display:"inline-block"}}/>🎯 Pitches <b style={{color:"#fff"}}>{ph}h ({pPct}%)</b></span>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:2,background:"#0F6E56",display:"inline-block"}}/>⚙ Exec <b style={{color:"#fff"}}>{eh}h ({ePct}%)</b></span>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginLeft:"auto"}}>Free: {free}h</span>
+                  </div>
                 </div>
-                <div style={{height:4,borderRadius:4,background:"rgba(255,255,255,0.1)",overflow:"hidden"}}>
-                  <div style={{height:"100%",width:`${Math.min(100,Math.max(w1l,w2l)/12*100)}%`,background:over?"#E24B4A":mod?"#EF9F27":M_COLOR[m],borderRadius:4,transition:"width .4s"}}/>
-                </div>
-                {leaveDays.length>0&&<div style={{marginTop:6,fontSize:10,color:"#FAC775"}}>🏖 {leaveDays.length} leave day{leaveDays.length>1?"s":""}</div>}
-                {isEditMode&&(state.photos||{})[m]&&<button onClick={()=>removePhoto(m)} style={{marginTop:6,fontSize:10,background:"rgba(255,255,255,0.1)",border:"none",borderRadius:4,color:"rgba(255,255,255,0.5)",cursor:"pointer",padding:"2px 6px"}}>Remove photo</button>}
+                {leaveDays.length>0&&<div style={{fontSize:10,color:"#FAC775"}}>🏖 {leaveDays.length} leave day{leaveDays.length>1?"s":""}</div>}
+                {isEditMode&&(state.photos||{})[m]&&<button onClick={()=>removePhoto(m)} style={{marginTop:4,fontSize:10,background:"rgba(255,255,255,0.1)",border:"none",borderRadius:4,color:"rgba(255,255,255,0.5)",cursor:"pointer",padding:"2px 6px"}}>Remove photo</button>}
               </div>
             );
           })}
         </div>
+
+        {/* Tab bar */}
         <div style={{display:"flex",gap:0,paddingTop:4}}>
           {[["calendar","📅 Calendar"],["board","📋 Board"]].map(([key,lbl])=>(
-            <button key={key} onClick={()=>setTab(key)} style={{flex:1,fontSize:13,fontWeight:tab===key?600:400,padding:"12px 0",cursor:"pointer",background:tab===key?"#fff":"transparent",color:tab===key?"#111":"rgba(255,255,255,0.55)",border:"none",borderRadius:tab===key?"10px 10px 0 0":"0",transition:"all .2s"}}>{lbl}</button>
+            <button key={key} onClick={()=>setTab(key)} style={{flex:1,fontSize:13,fontWeight:tab===key?700:400,padding:"12px 0",cursor:"pointer",background:tab===key?"#fff":"transparent",color:tab===key?"#111":"rgba(255,255,255,0.55)",border:"none",borderRadius:tab===key?"10px 10px 0 0":"0",transition:"all .2s"}}>{lbl}</button>
           ))}
         </div>
       </div>
 
+      {/* ── CONTENT ── */}
       <div style={{background:"#fff",borderRadius:"0 0 16px 16px",padding:"20px",border:"1px solid #eee",borderTop:"none",marginBottom:16}}>
-        {!isEditMode&&<div style={{background:"#f9f9f9",border:"0.5px solid #eee",borderRadius:8,padding:"8px 14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#888"}}>👁 View only — tasks and calendar are read-only.</span><button onClick={()=>setShowPwModal(true)} style={{fontSize:11,color:"#534AB7",background:"none",border:"0.5px solid #AFA9EC",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>Unlock editing</button></div>}
-        {bothHeavy&&<div style={{background:"#FCEBEB",border:"0.5px solid #F09595",borderRadius:10,padding:"10px 16px",marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:13,fontWeight:500,color:"#A32D2D"}}>⚠ Team overloaded — consider redistributing or bringing in Raha</span><button onClick={()=>setShowSuggest(s=>!s)} style={{fontSize:11,color:"#A32D2D",background:"none",border:"0.5px solid #E06060",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>{showSuggest?"Hide":"Suggestions"}</button></div>{showSuggest&&<ul style={{margin:"8px 0 0",paddingLeft:16,fontSize:12,color:"#793030",lineHeight:2}}><li>Assign overflow to Raha.</li><li>Push lower-priority revisions to next week.</li><li>Stagger venue oculars.</li></ul>}</div>}
-        {overlaps.length>0&&<div style={{background:"#FBEAF0",border:"0.5px solid #ED93B1",borderRadius:10,padding:"10px 16px",marginBottom:10}}><p style={{margin:"0 0 4px",fontSize:13,fontWeight:500,color:"#993556"}}>📅 Deadline overlaps detected</p>{overlaps.map(([date,arr])=><p key={date} style={{margin:"2px 0",fontSize:12,color:"#72243E"}}><b>{date}</b> — {arr.map(t=>`${t.member}: ${t.project}`).join(" · ")}</p>)}</div>}
 
+        {/* Urgency legend */}
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:"#888",marginBottom:14,padding:"8px 12px",background:"#f9f9f9",borderRadius:8}}>
+          <span style={{fontWeight:600,color:"#555"}}>Priority:</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,border:"2px solid #E24B4A",display:"inline-block"}}/>Due Today</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,border:"2px solid #EF9F27",display:"inline-block"}}/>Due Tomorrow</span>
+          <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:12,height:12,borderRadius:2,border:"2px solid #FAC775",display:"inline-block"}}/>Within 3 days</span>
+          <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:2,background:"#534AB7",display:"inline-block"}}/>Pitch</span>
+            <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:2,background:"#0F6E56",display:"inline-block"}}/>Execution</span>
+          </span>
+        </div>
+
+        {!isEditMode&&<div style={{background:"#f9f9f9",border:"0.5px solid #eee",borderRadius:8,padding:"8px 14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#888"}}>👁 View only — read-only mode.</span><button onClick={()=>setShowPwModal(true)} style={{fontSize:11,color:"#534AB7",background:"none",border:"0.5px solid #AFA9EC",borderRadius:6,padding:"3px 10px",cursor:"pointer"}}>Unlock editing</button></div>}
+
+        {/* CALENDAR */}
         {tab==="calendar"&&<div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
             <button onClick={()=>setWindowOffset(o=>o-1)} style={{fontSize:13,padding:"6px 16px",borderRadius:8,border:"0.5px solid #ddd",background:"#f9f9f9",color:"#111",cursor:"pointer"}}>← Prev</button>
@@ -495,58 +524,112 @@ export default function Dashboard() {
           </div>
           <WeekStrip wDays={week1} label="Week 1"/>
           <WeekStrip wDays={week2} label="Week 2"/>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:11,color:"#888",marginTop:4}}>
-            <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#ECEAE4",borderRadius:2,display:"inline-block",border:"0.5px solid #C4C2B9"}}/>Weekend</span>
-            <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"#FDF3E0",borderRadius:2,display:"inline-block"}}/>Holiday</span>
-            <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,borderRadius:2,display:"inline-block",border:"2px solid #534AB7"}}/>Today</span>
-            {MEMBERS.map(m=><span key={m} style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:M_COLOR[m],display:"inline-block"}}/>{m}</span>)}
-          </div>
         </div>}
 
+        {/* BOARD — split Pitches | Executions */}
         {tab==="board"&&<div>
-          <div style={{display:"flex",gap:8,marginBottom:16}}>
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
             {MEMBERS.map(m=>(
-              <button key={m} onClick={()=>setBoardMember(m)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderRadius:10,cursor:"pointer",background:boardMember===m?M_BG[m]:"#f9f9f9",border:`1.5px solid ${boardMember===m?M_BORDER[m]:"#eee"}`,transition:"all .15s"}}>
-                <Avatar member={m} size={24}/>
-                <span style={{fontSize:13,fontWeight:boardMember===m?600:400,color:boardMember===m?M_TEXT[m]:"#888"}}>{m}</span>
+              <button key={m} onClick={()=>setBoardMember(m)} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 16px",borderRadius:10,cursor:"pointer",background:boardMember===m?M_BG[m]:"#f9f9f9",border:`1.5px solid ${boardMember===m?M_BORDER[m]:"#eee"}`}}>
+                <Avatar member={m} size={22}/>
+                <span style={{fontSize:13,fontWeight:boardMember===m?700:400,color:boardMember===m?M_TEXT[m]:"#888"}}>{m}</span>
               </button>
             ))}
           </div>
-          {(()=>{ const mt=allTasks.filter(t=>t.member===boardMember).sort((a,b)=>a.deadline.localeCompare(b.deadline)); const active=mt.filter(t=>!t.done),done=mt.filter(t=>t.done); if(!mt.length)return<div style={{textAlign:"center",padding:"40px 0",color:"#bbb"}}><div style={{fontSize:32,marginBottom:8}}>📋</div><p style={{fontSize:13}}>No tasks assigned to {boardMember} yet.</p></div>; return<>{active.length>0&&<div style={{marginBottom:16}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 8px",color:"#888"}}>Active — {active.length} task{active.length!==1?"s":""}</p>{active.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</div>}{done.length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 8px",color:"#3B6D11"}}>✓ Completed — {done.length} task{done.length!==1?"s":""}</p>{done.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</div>}</>; })()}
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            {/* Pitches column */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,paddingBottom:8,borderBottom:"2px solid #EEEDFE"}}>
+                <span style={{fontSize:14,fontWeight:700,color:"#534AB7"}}>🎯 Pitches</span>
+                <span style={{fontSize:11,background:"#EEEDFE",color:"#534AB7",borderRadius:20,padding:"2px 8px",fontWeight:600}}>{Math.round(weekHours(boardMember,"pitch")*10)/10}h this week</span>
+              </div>
+              {(()=>{
+                const tasks=allTasks.filter(t=>t.member===boardMember&&t.side==="pitch").sort((a,b)=>a.deadline.localeCompare(b.deadline));
+                const active=tasks.filter(t=>!t.done),done=tasks.filter(t=>t.done);
+                if(!tasks.length)return<div style={{textAlign:"center",padding:"30px 0",color:"#bbb",fontSize:13}}>No pitch tasks assigned</div>;
+                return<>{active.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}{done.length>0&&<><p style={{fontSize:11,color:"#3B6D11",fontWeight:600,margin:"8px 0 4px"}}>✓ Completed ({done.length})</p>{done.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</>}</>;
+              })()}
+            </div>
+
+            {/* Executions column */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,paddingBottom:8,borderBottom:"2px solid #E1F5EE"}}>
+                <span style={{fontSize:14,fontWeight:700,color:"#0F6E56"}}>⚙ Executions</span>
+                <span style={{fontSize:11,background:"#E1F5EE",color:"#0F6E56",borderRadius:20,padding:"2px 8px",fontWeight:600}}>{Math.round(weekHours(boardMember,"execution")*10)/10}h this week</span>
+              </div>
+              {(()=>{
+                const tasks=allTasks.filter(t=>t.member===boardMember&&t.side==="execution").sort((a,b)=>a.deadline.localeCompare(b.deadline));
+                const active=tasks.filter(t=>!t.done),done=tasks.filter(t=>t.done);
+                if(!tasks.length)return<div style={{textAlign:"center",padding:"30px 0",color:"#bbb",fontSize:13}}>No execution tasks assigned</div>;
+                return<>{active.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}{done.length>0&&<><p style={{fontSize:11,color:"#3B6D11",fontWeight:600,margin:"8px 0 4px"}}>✓ Completed ({done.length})</p>{done.map(t=><BoardCard key={t.id} t={t} iso={t.date} member={boardMember}/>)}</>}</>;
+              })()}
+            </div>
+          </div>
         </div>}
       </div>
 
+      {/* ── FORM ── */}
       {isEditMode&&<div style={{background:"#fff",border:"0.5px solid #eee",borderRadius:14,padding:"18px",marginBottom:16}}>
         <div style={{display:"flex",gap:4,marginBottom:14}}>
           {[["task","Assign Task"],["leave","Add Leave"],["holiday","Add Holiday"]].map(([key,lbl])=>(
             <button key={key} onClick={()=>setFormTab(key)} style={{fontSize:12,fontWeight:500,padding:"6px 14px",borderRadius:20,cursor:"pointer",background:formTab===key?"#111":"transparent",color:formTab===key?"#fff":"#888",border:`0.5px solid ${formTab===key?"#111":"#ccc"}`}}>{lbl}</button>
           ))}
         </div>
-        {formTab==="task"&&<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Team member</label><select value={form.member} onChange={e=>setForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Task type</label><select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{TASK_TYPES.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Start date (optional)</label><input type="date" value={form.startDate} onChange={e=>setForm(f=>({...f,startDate:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Deadline</label><input type="date" value={form.deadline} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-          <div style={{gridColumn:"1 / -1"}}><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Difficulty & points</label><div style={{display:"flex",gap:6}}>{DIFFICULTY.map(d=><button key={d.id} onClick={()=>setForm(f=>({...f,difficulty:d.id}))} style={{flex:1,fontSize:12,fontWeight:500,padding:"7px 0",borderRadius:8,cursor:"pointer",background:form.difficulty===d.id?d.bg:"#f5f5f5",color:form.difficulty===d.id?d.color:"#888",border:`0.5px solid ${form.difficulty===d.id?d.border:"#ddd"}`}}>{d.label}<br/><span style={{fontSize:10,fontWeight:400}}>{d.pts}pt{d.pts>1?"s":""}</span></button>)}</div></div>
-          <div style={{gridColumn:"1 / -1"}}><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Project / event name</label><input value={form.project} onChange={e=>setForm(f=>({...f,project:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addTask()} placeholder="e.g. Ayala Museum pitch, SM North venue walk" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-        </div><button onClick={addTask} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>+ Assign task</button></>}
-        {formTab==="leave"&&<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Member</label><select value={leaveForm.member} onChange={e=>setLeaveForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Leave date</label><input type="date" value={leaveForm.date} onChange={e=>setLeaveForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-        </div>
-        <button onClick={addLeave} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Mark leave day</button>
-        {MEMBERS.map(m=>{ const ld=Object.keys((state.leaves||{})[m]||{}).sort(); if(!ld.length)return null; return<div key={m} style={{marginBottom:10}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>{m}'s leave days</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{ld.map(d=><span key={d} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:`0.5px solid ${M_BORDER[m]}`}}>{d}<button onClick={()=>removeLeave(m,d)} style={{background:"#fff",border:`1px solid ${M_BORDER[m]}`,borderRadius:"50%",width:16,height:16,cursor:"pointer",color:M_TEXT[m],fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>; })}</>}
-        {formTab==="holiday"&&<><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Date</label><input type="date" value={holForm.date} onChange={e=>setHolForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-          <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Holiday name</label><input value={holForm.label} onChange={e=>setHolForm(f=>({...f,label:e.target.value}))} placeholder="e.g. Holy Week" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
-        </div>
-        <button onClick={addHoliday} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Add holiday</button>
-        {Object.keys(state.holidays||{}).length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>Marked holidays</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{Object.entries(state.holidays||{}).sort().map(([d,lbl])=><span key={d} style={{fontSize:11,background:"#FAEEDA",color:"#854F0B",borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:"0.5px solid #EF9F27"}}>{d} · {lbl}<button onClick={()=>removeHoliday(d)} style={{background:"#fff",border:"1px solid #EF9F27",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:"#854F0B",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>}</>}
+
+        {formTab==="task"&&<>
+          {/* Side selector */}
+          <div style={{display:"flex",gap:8,marginBottom:14}}>
+            {["pitch","execution"].map(s=>(
+              <button key={s} onClick={()=>setForm(f=>({...f,side:s,type:s==="pitch"?"pitch":"execution"}))} style={{flex:1,padding:"10px 0",fontSize:13,fontWeight:600,borderRadius:10,cursor:"pointer",background:form.side===s?(s==="pitch"?"#EEEDFE":"#E1F5EE"):"#f5f5f5",color:form.side===s?(s==="pitch"?"#534AB7":"#0F6E56"):"#888",border:`2px solid ${form.side===s?(s==="pitch"?"#AFA9EC":"#5DCAA5"):"#eee"}`}}>
+                {s==="pitch"?"🎯 Pitch":"⚙ Execution"}
+              </button>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Team member</label><select value={form.member} onChange={e=>setForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Task type</label><select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{currentTypeList.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></div>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Start date (optional)</label><input type="date" value={form.startDate} onChange={e=>setForm(f=>({...f,startDate:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Deadline</label><input type="date" value={form.deadline} onChange={e=>setForm(f=>({...f,deadline:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+            <div style={{gridColumn:"1 / -1"}}>
+              <label style={{fontSize:11,color:"#888",display:"block",marginBottom:6}}>Estimated hours</label>
+              <div style={{display:"flex",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                {HOUR_PRESETS.map(h=><button key={h} onClick={()=>setForm(f=>({...f,hours:h,customHours:""}))} style={{padding:"6px 12px",fontSize:12,borderRadius:8,cursor:"pointer",background:form.hours===h&&!form.customHours?"#534AB7":"#f5f5f5",color:form.hours===h&&!form.customHours?"#fff":"#555",border:`0.5px solid ${form.hours===h&&!form.customHours?"#534AB7":"#ddd"}`}}>{h}h</button>)}
+                <input type="number" placeholder="Custom" value={form.customHours} onChange={e=>setForm(f=>({...f,customHours:e.target.value}))} style={{width:80,fontSize:13,padding:"6px 8px",borderRadius:8,border:"0.5px solid #ccc",boxSizing:"border-box"}}/>
+              </div>
+            </div>
+            {form.side==="execution"&&<div style={{gridColumn:"1 / -1"}}>
+              <label style={{fontSize:11,color:"#888",display:"block",marginBottom:6}}>Execution status</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {EXEC_STATUSES.map(s=><button key={s.id} onClick={()=>setForm(f=>({...f,status:s.id}))} style={{fontSize:11,padding:"5px 12px",borderRadius:20,cursor:"pointer",background:form.status===s.id?s.bg:"transparent",color:form.status===s.id?s.color:"#aaa",border:`1px solid ${form.status===s.id?s.border:"#ddd"}`}}>{s.label}</button>)}
+              </div>
+            </div>}
+            <div style={{gridColumn:"1 / -1"}}><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Project / event name</label><input value={form.project} onChange={e=>setForm(f=>({...f,project:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addTask()} placeholder="e.g. Ayala Museum pitch, SM North venue walk" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+          </div>
+          <button onClick={addTask} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:600,background:form.side==="pitch"?"#534AB7":"#0F6E56",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>+ Assign {form.side==="pitch"?"Pitch":"Execution"} Task</button>
+        </>}
+
+        {formTab==="leave"&&<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Member</label><select value={leaveForm.member} onChange={e=>setLeaveForm(f=>({...f,member:e.target.value}))} style={{width:"100%",fontSize:13,padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}>{MEMBERS.map(m=><option key={m}>{m}</option>)}</select></div>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Leave date</label><input type="date" value={leaveForm.date} onChange={e=>setLeaveForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+          </div>
+          <button onClick={addLeave} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Mark leave day</button>
+          {MEMBERS.map(m=>{ const ld=Object.keys((state.leaves||{})[m]||{}).sort(); if(!ld.length)return null; return<div key={m} style={{marginBottom:10}}><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>{m}'s leave days</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{ld.map(d=><span key={d} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:`0.5px solid ${M_BORDER[m]}`}}>{d}<button onClick={()=>removeLeave(m,d)} style={{background:"#fff",border:`1px solid ${M_BORDER[m]}`,borderRadius:"50%",width:16,height:16,cursor:"pointer",color:M_TEXT[m],fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>; })}
+        </>}
+
+        {formTab==="holiday"&&<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Date</label><input type="date" value={holForm.date} onChange={e=>setHolForm(f=>({...f,date:e.target.value}))} style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+            <div><label style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>Holiday name</label><input value={holForm.label} onChange={e=>setHolForm(f=>({...f,label:e.target.value}))} placeholder="e.g. Holy Week" style={{width:"100%",fontSize:13,boxSizing:"border-box",padding:"6px 8px",borderRadius:6,border:"0.5px solid #ccc"}}/></div>
+          </div>
+          <button onClick={addHoliday} style={{width:"100%",padding:"10px",fontSize:13,fontWeight:500,background:"#111",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",marginBottom:12}}>+ Add holiday</button>
+          {Object.keys(state.holidays||{}).length>0&&<div><p style={{fontSize:12,fontWeight:500,margin:"0 0 6px"}}>Marked holidays</p><div style={{display:"flex",flexWrap:"wrap",gap:5}}>{Object.entries(state.holidays||{}).sort().map(([d,lbl])=><span key={d} style={{fontSize:11,background:"#FAEEDA",color:"#854F0B",borderRadius:6,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,border:"0.5px solid #EF9F27"}}>{d} · {lbl}<button onClick={()=>removeHoliday(d)} style={{background:"#fff",border:"1px solid #EF9F27",borderRadius:"50%",width:16,height:16,cursor:"pointer",color:"#854F0B",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontWeight:700}}>✕</button></span>)}</div></div>}
+        </>}
       </div>}
 
       <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"0 0 16px"}}>
-        {TASK_TYPES.map(t=><span key={t.id} style={{fontSize:11,background:"#f5f5f5",color:"#888",border:"0.5px solid #ddd",borderRadius:20,padding:"3px 10px"}}>{t.label}</span>)}
-        {MEMBERS.map(m=><span key={m} style={{fontSize:11,background:M_BG[m],color:M_TEXT[m],border:`0.5px solid ${M_BORDER[m]}`,borderRadius:20,padding:"3px 10px"}}>{m}</span>)}
+        {EXEC_STATUSES.map(s=><span key={s.id} style={{fontSize:11,background:s.bg,color:s.color,border:`0.5px solid ${s.border}`,borderRadius:20,padding:"3px 10px"}}>{s.label}</span>)}
       </div>
     </div>
   );
