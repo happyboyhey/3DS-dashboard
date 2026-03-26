@@ -828,4 +828,3 @@ function LoginScreen({ onLogin }){
 function navBtn(){ return {fontSize:12,padding:"7px 14px",borderRadius:8,border:"0.5px solid #ddd",background:"#fff",cursor:"pointer",color:"#555"}; }
 function selectSt(){ return {width:"100%",fontSize:13,padding:"8px 10px",borderRadius:8,border:"0.5px solid #ddd",background:"#fff",outline:"none"}; }
 function inputSt(){ return {width:"100%",boxSizing:"border-box",fontSize:13,padding:"8px 10px",borderRadius:8,border:"0.5px solid #ddd",outline:"none"}; }
-function formatDate(iso){ if(!iso)return"—"; const[y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
